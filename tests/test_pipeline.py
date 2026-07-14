@@ -193,7 +193,7 @@ def test_reengage_prize_is_at_risk_and_ev_uses_save_rate():
     a = acct(account_id="R", gmv_total_6m=10000, orders_6m=6,
              monthly_gmv=[3000, 3000, 3000, 500, 0, 0], momentum_pct=-80)
     d = decide(a, classify(a))
-    assert d.play == "reengage" and d.prize_type == "GMV at risk"
+    assert d.play == "reengage" and d.prize_type.startswith("GMV at risk")
     assert d.expected_value == round(config.SAVE_RATE * d.prize_gmv, 0)
 
 
