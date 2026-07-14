@@ -68,7 +68,7 @@ Add `--llm` to have Claude write the drafts (needs `ANTHROPIC_API_KEY`); without
 it, drafts are templated — real and personalised, just not model-written.
 
 ```bash
-pip install -r requirements-dev.txt && python -m pytest -q   # 25 tests
+pip install -r requirements-dev.txt && python -m pytest -q   # 26 tests
 ```
 
 ## How it works
@@ -97,12 +97,12 @@ flowchart LR
 human: cleaning, segmentation, the play decision, and the draft. A person (or a
 messaging agent) only enters at the end — to send the drafted message, make the
 call, or tweak a draft. The `reason` on every row is there so that hand-off is a
-5-second read, not a re-investigation. The dashed line is the learning loop: the
-`outcomes` table logs whether each action landed, and a ~10% deterministic
-**holdout** (control group, no outreach) is set aside so the effect can be
-measured against a baseline rather than assumed. Closing it — auto-reweighting
-the priors in `data/plays/*.md` from measured rates — is the next step; the
-plumbing (outcomes + control arm) is already in.
+5-second read, not a re-investigation. The dashed line is the learning loop, and
+it's **closed**: the `outcomes` table logs whether each action landed, a ~10%
+deterministic **holdout** (control group, no outreach) gives a baseline to
+measure against, and at the start of every run [`learning.apply`](retention_agent/learning.py)
+blends the EV priors toward the observed rates (shrinkage — see below) so the
+next run re-ranks on evidence, not just assumptions.
 
 ### Module map
 
@@ -117,7 +117,8 @@ retention_agent/
   analysis.py      calibrate(): derive the growth priors from the book itself
   draft.py         templated drafts (default) + optional LLM rewrite
   llm.py           thin Anthropic wrapper; degrades to None (never throws)
-  store.py         SQLite state + new/changed/unchanged diff + outcomes table
+  store.py         SQLite state + new/changed/unchanged/stale diff + outcomes
+  learning.py      close the loop: blend EV priors toward measured outcomes
   orchestrator.py  the loop: ingest -> diff -> decide -> draft -> persist -> report
   report.py        CSV / JSON / self-contained HTML outputs
 cli.py             run / status / calibrate / outcome / reset
@@ -243,21 +244,21 @@ on a whale between drops or an account that bounced back last month.
 
 Being honest about where this is thin matters more than a confident headline:
 
-- **The EV priors are assumptions, not measurements.** `SAVE_RATE`, conversion
-  rates, migration expansion, and the growth uplift %s are documented priors. The
-  *ranking within* a play is robust (it's monotonic in GMV); the *cross-play*
-  ordering depends on these numbers. The `outcomes` table + `cli.py outcome` exist
-  to replace them with measured accept/convert rates — that's the first thing I'd
-  wire live, and it's why the ranking is labelled "expected value", not "£ at stake".
-- **Growth uplift is correlational — but a holdout is wired to fix that.** Engaged
-  accounts spending 2x doesn't *prove* a nudge causes the lift (selection bias —
-  engaged buyers may just be keener). So ~10% of would-be-actioned accounts are
-  held back as a deterministic control group (`plays.is_holdout`, seeded by a hash
-  of `account_id` so it's stable across runs): their intended play is recorded but
-  no outreach fires. Once outcomes accrue, comparing treated-vs-holdout GMV in the
-  `outcomes` table turns the correlational prior into a measured, causal lift. The
-  loop isn't closed yet (rates don't auto-feed `config`), but the control arm it
-  needs is in place, not hand-waved.
+- **The EV priors start as assumptions, then learn.** `SAVE_RATE`, conversion
+  rates, migration expansion, and the growth uplift %s begin as documented priors.
+  Each run [`learning.apply`](retention_agent/learning.py) blends them toward the
+  rates observed in the `outcomes` table using shrinkage — `learned =
+  (prior·k + observed·n)/(k+n)`, k=20 — so with no data the prior holds, and with
+  many outcomes it converges to reality. Until outcomes accrue they're still
+  assumptions (which is why the ranking is "expected value", not "£ at stake"),
+  but the mechanism that replaces them is wired and tested, not deferred.
+- **Growth uplift is correlational — a holdout makes it causal.** Engaged accounts
+  spending 2x doesn't *prove* a nudge causes the lift (selection bias — engaged
+  buyers may just be keener). So ~10% of would-be-actioned accounts are held back
+  as a deterministic control group (`plays.is_holdout`, seeded by a hash of
+  `account_id` so it's stable across runs): their intended play is recorded but no
+  outreach fires. Comparing treated-vs-holdout GMV in the `outcomes` table is what
+  turns the correlational prior into a measured, causal lift as data accrues.
 - **Six months is short for cadence.** The health gates (a rhythm-then-silence
   cadence gate, plus a recovery guard so a rebounded month isn't called "at risk")
   are the right shape, but with a longer history I'd model each account's own

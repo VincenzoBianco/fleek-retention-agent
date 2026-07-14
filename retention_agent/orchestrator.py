@@ -11,6 +11,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from . import learning
 from .draft import make_draft
 from .ingest import load_accounts
 from .llm import LLM
@@ -24,6 +25,11 @@ def run(source_path: str | Path, sheet: str, store: Store,
         use_llm: bool = False, workers: int = 8, source_ts: float = 0.0) -> RunReport:
     accounts = load_accounts(source_path, sheet)
     run_id = store.start_run(f"{Path(source_path).name}:{sheet}")
+
+    # Close the loop: blend the EV priors toward any logged outcomes before we
+    # decide, so each run re-ranks on the latest evidence (no-op until outcomes
+    # exist). Deterministic — same outcomes in, same priors out.
+    learned = learning.apply(store)
 
     split = store.diff(accounts, source_ts=source_ts)
     to_decide = split["new"] + split["changed"]
@@ -75,6 +81,7 @@ def run(source_path: str | Path, sheet: str, store: Store,
         play_counts=store.play_counts(),
         gmv_at_stake_total=sum(r["gmv_at_stake"] or 0 for r in queue),
         expected_value_total=sum(r["expected_value"] or 0 for r in queue),
+        learned_priors=learned,
     )
     store.finish_run(report)
     return report

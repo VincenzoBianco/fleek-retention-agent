@@ -70,7 +70,10 @@ def choose_feature(a: Account) -> tuple[str, str]:
         if a.aov >= config.HANDPICK_HIGH_AOV:
             return "build_a_bundle", f"handpick-led, £{a.aov:,.0f} AOV — scale via curated bundles, keep the AOV"
         return "bundles", f"handpick-led, £{a.aov:,.0f} AOV — a volume bundle play fits a price-led buyer"
-    return "build_a_bundle", "engaged with headroom — a curated bundle is the next step"
+    # fallback — differentiate the reason per account (£/orders/bundle mix) so the
+    # queue doesn't show a wall of identical rows
+    return "build_a_bundle", (f"£{a.gmv_total_6m:,.0f} over {a.orders_6m} orders, "
+                              f"{a.bundle_gmv_share_pct:.0f}% bundle — a curated bundle grows the basket")
 
 
 # --------------------------------------------------------------------------

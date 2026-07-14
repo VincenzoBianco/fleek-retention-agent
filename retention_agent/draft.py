@@ -77,11 +77,12 @@ def heuristic_draft(a: Account, d: Decision) -> str:
             "build_a_bundle": (f"Hi! Want to try a build-a-bundle? You set the mix and we curate it to your "
                                f"spec — a clean way to scale past {scale} without dropping the quality you "
                                f"pick for your {who}."),
-            "video": ("Hi! Saw you've made a few offers recently — fancy a quick 15-min video viewing of "
-                      "this week's fresh stock? Easier to lock in the pieces you want and sort pricing "
-                      "live on the call."),
-            "chat": (f"Hi! You've been browsing a fair bit lately — want me to drop a shortlist of what's "
-                     f"just landed at {scale} into a chat, so you don't have to hunt for it?"),
+            "video": (f"Hi! Saw you've put in {a.make_an_offer_6m:.0f} offers recently — fancy a quick 15-min "
+                      f"video viewing of this week's fresh stock? Easier to lock in the pieces you want at "
+                      f"{scale} and sort pricing live on the call."),
+            "chat": (f"Hi! You've been browsing a fair bit ({a.pdp_views_6m:.0f} views lately) — want me to "
+                     f"drop a shortlist of what's just landed at {scale} into a chat, so you don't have to "
+                     f"hunt for it?"),
         }.get(d.feature or "", "Hi! A few new pieces just landed that suit what you order — worth a look?")
 
     return ""

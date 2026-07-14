@@ -96,3 +96,4 @@ class RunReport(BaseModel):
     play_counts: dict[str, int] = Field(default_factory=dict)
     gmv_at_stake_total: float = 0.0      # sum of descriptive prizes (mixed types)
     expected_value_total: float = 0.0    # sum of risk-adjusted EV (the comparable number)
+    learned_priors: dict = Field(default_factory=dict)  # priors updated from outcomes this run

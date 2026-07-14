@@ -250,6 +250,29 @@ def test_outcomes_recorded_and_rates_computed(tmp_path):
     assert rates["grow_selfserve"]["conversion_rate"] == 1.0
 
 
+def test_learning_loop_shrinks_prior_toward_observed(tmp_path):
+    from retention_agent import config, learning
+    store = Store(tmp_path / "s.db")
+    r = store.start_run("run")
+    base = config.SAVE_RATE
+    # no outcomes yet -> no change (shrinkage to prior)
+    assert learning.learned_priors(store) == {}
+    # log 3 successful reengage win-backs
+    for i in range(3):
+        store.record_outcome(f"ACC-{i}", r, "reengage", None, responded=True, converted=True, gmv_delta=1000)
+    learned = learning.learned_priors(store, k=20)
+    old, new, n = learned["SAVE_RATE"]
+    assert old == base and n == 3
+    assert base < new < 1.0                    # moved toward observed 1.0, but shrunk by k
+    assert abs(new - (base * 20 + 1.0 * 3) / 23) < 1e-3   # 4-dp rounded in _shrink
+    # apply writes it onto config; restore after so we don't leak into other tests
+    try:
+        learning.apply(store, k=20)
+        assert config.SAVE_RATE == new
+    finally:
+        config.SAVE_RATE = base
+
+
 # --- idempotency contract -------------------------------------------------
 def _upsert(store, a, run_id):
     d = decide(a, classify(a))

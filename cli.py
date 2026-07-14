@@ -34,6 +34,10 @@ def _run(args):
           f"unchanged/skipped={report.n_unchanged_skipped}  stale/skipped={report.n_stale_skipped}")
     print(f"  actions queued={report.n_actions}  holdout(control)={report.n_holdout}  "
           f"expected value (risk-adj)=£{report.expected_value_total:,.0f}")
+    if report.learned_priors:
+        learned = ", ".join(f"{k}: {v['from']}→{v['to']} (n={v['n']})"
+                            for k, v in report.learned_priors.items())
+        print(f"  learned priors from outcomes: {learned}")
     print(f"  plays: {report.play_counts}")
     print(f"  wrote: {out['csv']}  {out['html']}")
     store.close()
