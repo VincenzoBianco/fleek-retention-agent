@@ -159,6 +159,23 @@ def test_rhythmic_buyer_gone_silent_is_dormant():
     assert classify(a).health == "dormant"
 
 
+def test_rebounded_account_not_flagged_declining():
+    # dipped mid-window but the latest month recovered -> not "at risk"
+    a = acct(account_id="REBOUND", gmv_total_6m=24000, orders_6m=6,
+             monthly_gmv=[5000, 5000, 6000, 1000, 500, 6000], momentum_pct=-45)
+    assert classify(a).health == "healthy"
+
+
+def test_at_risk_is_forward_exposure_not_lifetime_gmv():
+    # still ordering, just sliding: at-risk must be the lost run-rate, not the
+    # whole 6-month GMV
+    a = acct(account_id="SLIDE", gmv_total_6m=18000, orders_6m=6,
+             monthly_gmv=[4000, 4000, 4000, 2000, 2000, 0], momentum_pct=-50)
+    d = decide(a, classify(a))
+    assert d.play == "reengage"
+    assert 0 < d.prize_gmv < a.gmv_total_6m       # forward exposure, not lifetime
+
+
 # --- expected-value ranking is comparable across plays --------------------
 def test_migrate_ev_is_far_below_its_exposure_prize():
     # £ on a human is NOT at-risk; EV must reflect that, not the raw exposure

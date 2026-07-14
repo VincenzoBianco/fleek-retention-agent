@@ -71,15 +71,25 @@ def decide(a: Account, seg: SegmentResult) -> Decision:
                 fingerprint=a.fingerprint)
 
     # 1. Retention guardrail — churning material account, any segment.
-    #    Prize is genuinely at-risk GMV; EV discounts by our win-back rate.
+    #    At-risk is FORWARD exposure — the run-rate we're losing, projected 6
+    #    months — not the full lifetime GMV (which overstates: an account still
+    #    ordering £1.8k/mo hasn't got its whole £18k window "at risk"). Capped at
+    #    what they actually spent in the window. EV discounts by the win-back rate.
     if material and seg.health in ("dormant", "declining"):
-        at_risk = round(a.gmv_total_6m, 0)
+        prior_monthly = sum(a.monthly_gmv[:3]) / 3
+        recent_monthly = sum(a.monthly_gmv[-3:]) / 3
+        lost_monthly = max(0.0, prior_monthly - recent_monthly)
+        at_risk = round(min(lost_monthly * 6, a.gmv_total_6m), 0)
         ev = round(config.SAVE_RATE * at_risk, 0)
-        gap = "silent for a quarter" if seg.health == "dormant" else f"spend down {abs(a.momentum_pct or 0):.0f}%"
+        gap = "silent for a quarter" if seg.health == "dormant" else f"run-rate down £{lost_monthly:,.0f}/mo"
+        # A broker-reliant account's drop may be the AM easing off, not the
+        # customer disengaging — flag it so the call checks the right actor.
+        actor = (" — confirm AM cadence vs genuine demand before the call"
+                 if a.broker_reliance >= config.BROKER_RELIANCE_HIGH else "")
         return Decision(**base, play="reengage", channel="call",
-                        action="Win-back call: find what changed, bring one concrete hook (fresh stock in their lines)",
-                        reason=f"£{at_risk:,.0f} at risk — {gap}",
-                        prize_type="GMV at risk", prize_gmv=at_risk, gmv_at_stake=at_risk,
+                        action="Win-back call: find what changed, bring one concrete hook (fresh stock in their lines)" + actor,
+                        reason=f"£{at_risk:,.0f} of forward GMV at risk — {gap}",
+                        prize_type="GMV at risk (fwd)", prize_gmv=at_risk, gmv_at_stake=at_risk,
                         expected_value=ev, priority=ev)
 
     # 2. Migrate broker-reliant material accounts. NB the £ on a human is NOT at

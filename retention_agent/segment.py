@@ -34,6 +34,7 @@ class SegmentResult:
 def _health(a: Account) -> str:
     first_half = sum(a.monthly_gmv[:3])
     last_quarter = sum(a.monthly_gmv[-3:])
+    latest_month = a.monthly_gmv[-1]
     active_months = sum(1 for m in a.monthly_gmv if m > 0)
     material = a.gmv_total_6m >= config.MATERIAL_ACCOUNT_GMV
     # A real churn signal needs materiality AND a broken rhythm. A big
@@ -43,8 +44,13 @@ def _health(a: Account) -> str:
               and active_months >= config.RHYTHM_MIN_ACTIVE_MONTHS)
     if material and rhythm and first_half > 0 and last_quarter <= config.DORMANT_RECENT_GMV:
         return "dormant"
+    # Declining only if the slide hasn't already reversed: the latest month must
+    # still be below RECOVERY_FRACTION of the earlier run-rate. An account that
+    # dipped mid-window but rebounded in the last month is not "at risk".
     if material and rhythm and a.momentum_pct is not None and a.momentum_pct <= config.DECLINE_MOMENTUM:
-        return "declining"
+        rebounded = latest_month >= config.RECOVERY_FRACTION * (first_half / 3)
+        if not rebounded:
+            return "declining"
     return "healthy"
 
 

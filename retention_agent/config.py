@@ -47,6 +47,11 @@ DORMANT_RECENT_GMV = 1.0         # <= this over the last 3 months = silent
 MATERIAL_ACCOUNT_GMV = 2000.0    # a "real" buyer worth flagging on health
 RHYTHM_MIN_ORDERS = 4            # ...and an established cadence: this many orders
 RHYTHM_MIN_ACTIVE_MONTHS = 3     # ...across at least this many distinct months
+# ...and it must NOT have bounced back: if the latest month already recovered to
+# this fraction of the earlier run-rate, the mid-window dip was noise, not a
+# slide. Without this, an account that dipped then rebounded in Feb still trips
+# the momentum gate and (worse) tops the queue.
+RECOVERY_FRACTION = 0.6
 
 # --- Consistency / cleaning -----------------------------------------------
 # The provided broker_reliance_pct disagrees with the raw order counts on a
