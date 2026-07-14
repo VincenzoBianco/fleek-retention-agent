@@ -49,6 +49,23 @@ MATERIAL_ACCOUNT_GMV = 2000.0    # a "real" buyer worth flagging on health
 # chunk of the book; flag when the gap is material so we can trust the counts.
 RELIANCE_RECONCILE_TOLERANCE = 10.0  # percentage points
 
+# --- Feature-nudge selection (grow self-serve) -----------------------------
+# Which feature to push is a decision tree over behaviour. Thresholds here; the
+# tree is in plays.choose_feature().
+VIDEO_OFFER_MIN = 3.0            # making this many offers but stalling = wants a call to close
+CHAT_VIEWS_MIN = 150.0          # heavy browser...
+CHAT_THREADS_MAX = 2.0          # ...who isn't talking to us yet = open a chat
+
+# Estimated GMV uplift per feature, used to size the prize and rank the queue.
+# These are deliberately conservative, documented assumptions — not measured
+# (we have no post-nudge outcomes yet). The learning loop would replace them.
+UPLIFT_FACTORS = {
+    "bundles": 0.30,          # basket-size lever: handpick-only -> bundles is the biggest
+    "build_a_bundle": 0.25,   # custom curation for already-engaged buyers
+    "video": 0.20,            # a call closes a stalling, offer-heavy buyer
+    "chat": 0.15,             # opening a conversation with a silent browser
+}
+
 # --- Prioritisation --------------------------------------------------------
 # We rank the action queue by GMV at stake, so the AM's scarce time (and the
 # agent's outreach budget) goes to the accounts that move the number most.

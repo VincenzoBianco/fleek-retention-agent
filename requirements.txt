@@ -3,3 +3,4 @@ openpyxl
 pydantic
 anthropic
 python-dotenv
+pyyaml
