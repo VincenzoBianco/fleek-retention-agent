@@ -24,6 +24,23 @@ def _ctx(a: Account) -> str:
             f"{a.orders_6m} orders · AOV £{a.aov:,.0f} · reliance {a.broker_reliance:.0f}%")
 
 
+# We do NOT have per-account product category in this dataset, so drafts never
+# claim to know what an account buys — they reference persona and order size
+# ("your", "the volumes you order"), not a specific category. If category data
+# were ingested later, this is the one place the copy would get more specific.
+def _who(a: Account) -> str:
+    return "shop" if (a.buyer_persona or "").lower() == "retailer" else "store"
+
+
+def _scale(a: Account) -> str:
+    """A size-aware phrase so 100+ growth messages aren't word-for-word identical."""
+    if a.aov >= 1000:
+        return "the larger volumes you order"
+    if a.aov >= 300:
+        return "your usual order size"
+    return "smaller test runs"
+
+
 # --------------------------------------------------------------------------
 # Heuristic templates
 # --------------------------------------------------------------------------
@@ -46,19 +63,19 @@ def heuristic_draft(a: Account, d: Decision) -> str:
                 f"as safety net for the first order or two. Don't imply the AM is going away.")
 
     if d.play == "grow_selfserve":
+        scale, who = _scale(a), _who(a)
         return {
-            "bundles": ("Hi! You've been buying handpicks — want me to send a starter bundle in your top "
-                        "category? Same quality, better price per unit, and it saves you the picking. "
-                        "Can have one ready today."),
-            "build_a_bundle": ("Hi! Want to try a build-a-bundle tuned to what you've been browsing? You "
-                               "pick the mix, we curate it — an easy way to scale up orders without the "
-                               "manual picking."),
+            "bundles": (f"Hi! You've been buying handpicks — want me to put together a starter bundle at "
+                        f"{scale}? Better price per unit and it saves you the picking. Can have one ready today."),
+            "build_a_bundle": (f"Hi! Want to try a build-a-bundle? You set the mix and we curate it to your "
+                               f"spec — a clean way to scale past {scale} without dropping the quality you "
+                               f"pick for your {who}."),
             "video": ("Hi! Saw you've made a few offers recently — fancy a quick 15-min video viewing of "
                       "this week's fresh stock? Easier to lock in the pieces you want and sort pricing "
                       "live on the call."),
-            "chat": ("Hi! You've been looking at a lot of stock lately — want me to drop a shortlist of "
-                     "what's just landed in your lines into a chat, so you don't have to hunt for it?"),
-        }.get(d.feature or "", "Hi! Wanted to share some fresh stock in your lines — worth a look?")
+            "chat": (f"Hi! You've been browsing a fair bit lately — want me to drop a shortlist of what's "
+                     f"just landed at {scale} into a chat, so you don't have to hunt for it?"),
+        }.get(d.feature or "", "Hi! A few new pieces just landed that suit what you order — worth a look?")
 
     return ""
 

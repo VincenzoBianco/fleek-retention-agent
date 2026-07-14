@@ -44,6 +44,7 @@ class Store:
                 play         TEXT, feature TEXT, channel TEXT,
                 action       TEXT, reason TEXT,
                 priority     REAL, gmv_at_stake REAL,
+                expected_value REAL, prize_type TEXT,
                 draft        TEXT, used_llm INTEGER DEFAULT 0,
                 first_seen_run INTEGER, last_seen_run INTEGER, decided_run INTEGER
             );
@@ -52,7 +53,15 @@ class Store:
                 source TEXT, n_seen INTEGER, n_new INTEGER, n_changed INTEGER,
                 n_unchanged INTEGER, n_actions INTEGER, gmv_at_stake REAL
             );
-            CREATE INDEX IF NOT EXISTS idx_priority ON accounts(priority DESC);
+            -- The feedback loop's landing pad: log what happened to each action so
+            -- the play priors (accept rates, uplift) become measured, not assumed.
+            CREATE TABLE IF NOT EXISTS outcomes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id TEXT, run_id INTEGER, play TEXT, feature TEXT,
+                sent INTEGER DEFAULT 0, responded INTEGER DEFAULT 0,
+                converted INTEGER DEFAULT 0, gmv_delta REAL, ts TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_priority ON accounts(expected_value DESC);
             """
         )
         self.db.commit()
@@ -93,20 +102,22 @@ class Store:
             """
             INSERT INTO accounts (account_id, fingerprint, ownership, region, persona,
                 gmv_total, segment, health, play, feature, channel, action, reason,
-                priority, gmv_at_stake, draft, used_llm,
+                priority, gmv_at_stake, expected_value, prize_type, draft, used_llm,
                 first_seen_run, last_seen_run, decided_run)
             VALUES (:aid, :fp, :own, :reg, :per, :gmv, :seg, :hea, :play, :feat, :chan,
-                :act, :rea, :pri, :stake, :draft, :llm, :run, :run, :run)
+                :act, :rea, :pri, :stake, :ev, :ptype, :draft, :llm, :run, :run, :run)
             ON CONFLICT(account_id) DO UPDATE SET
                 fingerprint=:fp, ownership=:own, region=:reg, persona=:per, gmv_total=:gmv,
                 segment=:seg, health=:hea, play=:play, feature=:feat, channel=:chan,
                 action=:act, reason=:rea, priority=:pri, gmv_at_stake=:stake,
+                expected_value=:ev, prize_type=:ptype,
                 draft=:draft, used_llm=:llm, last_seen_run=:run, decided_run=:run
             """,
             dict(aid=a.account_id, fp=a.fingerprint, own=a.ownership, reg=a.region,
                  per=a.buyer_persona, gmv=a.gmv_total_6m, seg=d.segment, hea=d.health,
                  play=d.play, feat=d.feature, chan=d.channel, act=d.action, rea=d.reason,
-                 pri=d.priority, stake=d.gmv_at_stake, draft=draft, llm=int(used_llm), run=run_id),
+                 pri=d.priority, stake=d.gmv_at_stake, ev=d.expected_value, ptype=d.prize_type,
+                 draft=draft, llm=int(used_llm), run=run_id),
         )
 
     def touch_seen(self, account_ids: list[str], run_id: int):
@@ -121,10 +132,40 @@ class Store:
 
     # --- reads (for reporting / export) ---
     def action_queue(self, limit: int | None = None) -> list[dict]:
-        q = "SELECT * FROM accounts WHERE play IS NOT NULL ORDER BY priority DESC"
+        q = "SELECT * FROM accounts WHERE play IS NOT NULL ORDER BY expected_value DESC"
         if limit:
             q += f" LIMIT {int(limit)}"
         return [dict(r) for r in self.db.execute(q).fetchall()]
+
+    def record_outcome(self, account_id: str, run_id: int, play: str, feature: str | None,
+                       sent=True, responded=False, converted=False, gmv_delta=0.0, ts="") -> None:
+        """Log what happened to an action. This is the feedback loop's write path:
+        aggregate these over time and the config priors (save/convert/uplift)
+        become measured accept rates instead of assumptions."""
+        self.db.execute(
+            """INSERT INTO outcomes (account_id, run_id, play, feature, sent, responded,
+                   converted, gmv_delta, ts) VALUES (?,?,?,?,?,?,?,?,?)""",
+            (account_id, run_id, play, feature, int(sent), int(responded),
+             int(converted), gmv_delta, ts),
+        )
+        self.db.commit()
+
+    def realized_rates(self) -> dict[str, dict]:
+        """Measured accept/convert rates per play from logged outcomes — what the
+        priors would be replaced with once outcomes accumulate."""
+        rows = self.db.execute(
+            """SELECT play, COUNT(*) n, SUM(responded) resp, SUM(converted) conv,
+                      SUM(gmv_delta) gmv FROM outcomes GROUP BY play""").fetchall()
+        out = {}
+        for r in rows:
+            n = r["n"] or 0
+            out[r["play"]] = {
+                "n": n,
+                "response_rate": round((r["resp"] or 0) / n, 2) if n else None,
+                "conversion_rate": round((r["conv"] or 0) / n, 2) if n else None,
+                "gmv_delta": r["gmv"] or 0,
+            }
+        return out
 
     def all_accounts(self) -> list[dict]:
         return [dict(r) for r in self.db.execute("SELECT * FROM accounts").fetchall()]

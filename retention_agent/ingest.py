@@ -82,12 +82,11 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     # activity / spend blanks = nothing recorded = 0
     zero_fill = [c for c in NUMERIC_COLS if c != "broker_reliance_pct"]
     df[zero_fill] = df[zero_fill].fillna(0)
-    # no negative money or counts
-    money_counts = ["gmv_total_6m", "orders_6m", *config.MONTH_COLS,
-                    "manual_orders", "self_serve_orders", "handpick_orders", "bundle_orders"]
-    df[money_counts] = df[money_counts].clip(lower=0)
+    # every numeric here is a count, an amount, a day-tally, or a percentage —
+    # all non-negative by nature, so a negative is bad data. Clip the lot.
+    df[NUMERIC_COLS] = df[NUMERIC_COLS].clip(lower=0)
     df[["broker_reliance_pct", "bundle_gmv_share_pct"]] = \
-        df[["broker_reliance_pct", "bundle_gmv_share_pct"]].clip(lower=0, upper=100)
+        df[["broker_reliance_pct", "bundle_gmv_share_pct"]].clip(upper=100)
 
     # --- recompute broker reliance from the counts we trust ---
     orders = df["orders_6m"].replace(0, np.nan)

@@ -70,6 +70,7 @@ def run(source_path: str | Path, sheet: str, store: Store,
         segment_counts=store.segment_counts(),
         play_counts=store.play_counts(),
         gmv_at_stake_total=sum(r["gmv_at_stake"] or 0 for r in queue),
+        expected_value_total=sum(r["expected_value"] or 0 for r in queue),
     )
     store.finish_run(report)
     return report

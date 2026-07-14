@@ -18,9 +18,9 @@ changed accounts are touched.
    orders. Find them from behaviour (high recomputed reliance + low app/PDP/offer
    activity) and move them to self-serve without losing the spend.
 2. **Grow self-serve spend** (self-serve). Find self-serve accounts with headroom
-   (high intent + low spend, or handpick-only) and nudge each toward the one
-   feature most likely to move its basket: **bundles**, **video**, **chat**, or
-   **build-a-bundle**.
+   and nudge each toward the one feature most likely to grow it: **video**,
+   **chat**, **bundles**, or **build-a-bundle** — matched to the account's
+   blocker, not one-size-fits-all (see the feature logic below).
 3. **Retention guardrail** (`reengage`). A material account that's gone quiet or
    is sliding gets stabilised *first* — there's no point migrating or upselling a
    churning account. This play takes precedence over the other two.
@@ -30,10 +30,11 @@ changed accounts are touched.
 | | |
 |---|---|
 | **128 of 210** account-managed accounts actually **behave self-serve** | label ≠ behaviour, so we never trust the label |
-| **74** genuinely broker-reliant; **26** material enough to migrate now | **£289k** of GMV currently riding on a human |
-| **35** material accounts churning (`reengage`) | **£298k** of GMV at risk |
-| **122** self-serve growth nudges | video 43 · build-a-bundle 36 · bundles 25 · chat 18 |
+| **33** material broker-reliant accounts to migrate now | **£341k** of GMV riding on a human (exposure, not at-risk) |
+| **25** material accounts genuinely churning (`reengage`) | **£196k** of GMV at risk |
+| **125** self-serve growth nudges | video 48 · build-a-bundle 42 · chat 18 · bundles 17 |
 | **85 / 300** accounts had a `broker_reliance_pct` that disagreed with their order counts | recomputed from counts, flagged |
+| Whole book ranked by **risk-adjusted expected value** | **£111k** of expected 6-month impact, honestly comparable across the three plays |
 
 ## Quickstart
 
@@ -59,6 +60,7 @@ python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx
 python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx --sheet new_accounts
 
 python cli.py status            # book state + run history
+python cli.py calibrate data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx  # the empirical priors
 ```
 
 Add `--llm` to have Claude write the drafts (needs `ANTHROPIC_API_KEY`); without
@@ -107,13 +109,14 @@ retention_agent/
   ingest.py        load + clean (vectorised pandas); recompute the signals we
                    don't trust; fingerprint each account
   segment.py       behavioural segmentation + health overlay (label-blind)
-  plays.py         which play fires, the NBA, the feature decision tree, £ prize
+  plays.py         which play fires, the NBA, the feature decision tree, EV prize
+  analysis.py      calibrate(): derive the growth priors from the book itself
   draft.py         templated drafts (default) + optional LLM rewrite
   llm.py           thin Anthropic wrapper; degrades to None (never throws)
-  store.py         SQLite state + the new/changed/unchanged diff (idempotency)
+  store.py         SQLite state + new/changed/unchanged diff + outcomes table
   orchestrator.py  the loop: ingest -> diff -> decide -> draft -> persist -> report
   report.py        CSV / JSON / self-contained HTML outputs
-cli.py             run / status / reset
+cli.py             run / status / calibrate / outcome / reset
 data/plays/        the three plays as markdown skills (edit behaviour here)
 ```
 
@@ -131,6 +134,40 @@ That's why 128 account-managed accounts land in a self-serve segment — they ha
 an AM, but they buy for themselves. Thresholds live in [config.py](retention_agent/config.py),
 one place, each with a rationale.
 
+### Ranking: one honest number across three different prizes
+
+The three plays protect or create **different kinds of money**, so ranking them on
+a single raw "£ at stake" would be misleading — the £341k *riding on a human* isn't
+at risk of loss (that spend continues if you do nothing), whereas the £196k of
+`reengage` GMV genuinely is, and growth uplift is speculative. Each play instead
+converts its prize to a **comparable expected £ impact over 6 months** with an
+explicit probability (all in [config.py](retention_agent/config.py), all labelled
+as priors pending the feedback loop):
+
+| Play | Prize (descriptive) | Expected value (ranking) |
+|---|---|---|
+| `reengage` | GMV **at risk** | `P(win-back) × at-risk GMV` |
+| `migrate` | GMV **on a human** (exposure) | `P(convert) × exposure × expansion` |
+| `grow` | **modelled uplift** | conservative slice of the engagement premium |
+
+The report shows both, so the queue never hides which is which. That's why ACC-001
+(£118k on a human) sits *below* smaller genuinely-at-risk accounts in the queue —
+correctly.
+
+### Which feature to nudge — grounded in the book, not assumed
+
+`python cli.py calibrate <workbook>` derives the priors from the data. Two findings
+shaped the growth logic:
+
+- **Handpick buyers are the higher-value cohort** (median AOV **£682** vs **£281**
+  for bundle-led buyers). So a valuable handpick-only account is *not* pushed onto
+  generic bundles (that would dilute its AOV) — it's nudged to **build-a-bundle**
+  (scale volume, keep curation). Only the low-AOV, price-led handpick buyer gets
+  plain bundles.
+- **Engaged self-serve accounts spend ~2x** (£493 vs £242 median). That premium is
+  the anchor for the growth uplift priors — a correlation used to *size* the prize,
+  not a measured causal lift (that's what the outcomes table is for).
+
 ### Built to keep running, and to scale
 
 - **Idempotent.** Each account stores the fingerprint of the data its decision
@@ -138,46 +175,76 @@ one place, each with a rationale.
   unchanged and only touches the first two. `account_id` is the primary key, so
   writes are upserts — the same account can never duplicate.
 - **Scale.** Cleaning and signal derivation are vectorised pandas; segmentation
-  and decisioning are a single O(n) pass; SQLite shrugs at 30k rows. The test
-  suite decides a **synthetic 30,000-account book in a few seconds**. The only
-  per-account external cost is LLM drafting — off by default, cached by
-  fingerprint when on, and the obvious next step is the Batch API.
+  and decisioning are a single O(n) pass. Two tests exercise 30k rows: the compute
+  path (clean → segment → decide) and the **store path** (diff + upsert of 30,000
+  accounts, then a re-diff), both well inside budget. The only per-account external
+  cost is LLM drafting — off by default, cached by fingerprint when on, and the
+  obvious next step is the Batch API.
 
 ## The debrief
 
 **First 30 days.** *Week 1:* run it on the inherited book, work the top of the
-action queue by £ at stake — the £298k of at-risk GMV (`reengage`) first, then
-the £289k riding on a human (`migrate`). *Week 4:* it's the morning job — I open
-`out/index.html`, the new/changed accounts are already decided and drafted, and I
-spend my time on the handful of big accounts that genuinely need a human, not on
-re-triaging the whole book.
+action queue by expected value — the 25 genuinely-churning accounts (`reengage`,
+£196k at risk) first, then the 33 migration targets. *Week 4:* it's the morning
+job — I open `out/index.html`, the new/changed accounts are already decided and
+drafted, and I spend my time on the handful of big accounts that genuinely need a
+human, not on re-triaging the whole book.
 
-**Migration.** The 26 material broker-reliant accounts, ranked by GMV-on-a-human.
-Warm ones (they already browse) get a one-tap in-app reorder nudge; cold ones get
-a 10-minute guided first order with their SKUs pre-loaded. The AM stays a safety
-net for the first order so spend doesn't wobble.
+**Migration.** The 33 material broker-reliant accounts, ranked by expected value
+(conversion probability × the exposure × modest expansion — *not* the raw £ on a
+human, which isn't at risk). Warm ones (they already browse) get a one-tap in-app
+reorder nudge; cold ones get a 10-minute guided first order with their usual lines
+pre-loaded. The AM stays a safety net for the first order so spend doesn't wobble.
 
-**Growth.** The 122 self-serve accounts with headroom, each matched to one
-feature by behaviour: handpick-only → bundles (basket size), offers-but-no-orders
-→ video (close on a call), heavy-browser-not-talking → chat, otherwise
-build-a-bundle. One nudge per account, not a menu.
+**Growth.** The 125 self-serve accounts with headroom, each matched to one feature
+by behaviour: offers-but-no-orders → video (close on a call), heavy-browser-not-
+talking → chat, a *valuable* handpick buyer → build-a-bundle (scale without
+diluting AOV), a price-led handpick buyer → bundles. One nudge per account, not a
+menu.
 
-**Health.** Healthiest = self-serving, engaged, spending, stable — the
-`self_serve_healthy` segment on a flat-or-up trend. We leave them alone (117
-accounts get *no* action on purpose). The unhealthy ones are the 35 material
-accounts that are dormant or sliding, which is exactly why `reengage` outranks
-everything else.
+**Health.** Healthiest = self-serving, engaged, spending, stable. We leave 117
+accounts alone *on purpose*. The unhealthy ones are the 25 material accounts with a
+broken ordering rhythm (dormant/declining) — separated from lumpy low-frequency
+buyers by the cadence gate, which is why `reengage` can outrank everything without
+crying wolf on a whale between drops.
+
+## Limitations (what I'd poke at next)
+
+Being honest about where this is thin matters more than a confident headline:
+
+- **The EV priors are assumptions, not measurements.** `SAVE_RATE`, conversion
+  rates, migration expansion, and the growth uplift %s are documented priors. The
+  *ranking within* a play is robust (it's monotonic in GMV); the *cross-play*
+  ordering depends on these numbers. The `outcomes` table + `cli.py outcome` exist
+  to replace them with measured accept/convert rates — that's the first thing I'd
+  wire live, and it's why the ranking is labelled "expected value", not "£ at stake".
+- **Growth uplift is correlational.** Engaged accounts spending 2x doesn't prove a
+  nudge *causes* the lift (selection bias — engaged buyers may just be keener). It
+  sizes the prize defensibly; a holdout would be needed to claim causal lift.
+- **Six months is short for cadence.** The dormancy cadence gate (rhythm then
+  silence) is the right shape, but with a longer history I'd model each account's
+  own inter-order interval rather than a fixed 3-months-silent rule.
+- **No product-category data in this dataset.** Drafts deliberately never claim to
+  know *what* an account buys (only persona, size, region) — if category were
+  ingested, [draft.py](retention_agent/draft.py) is the one place the copy would
+  get more specific.
+- **Some cleaning is defensive.** The duplicate-ID, negative-value, and
+  gmv-total-mismatch guards don't fire on *this* (clean-ish) book; they're there
+  for messier exports and are proven by fixture tests, not by the real file.
 
 ## How I used AI
 
 Built with **Claude Code**. Where it helped: profiling the messy data fast
-(spotting that `broker_reliance_pct` disagrees with the counts and that
-`gmv_trend_pct` is half-blank because it divides by a zero Sep), scaffolding the
-vectorised pandas and the SQLite store, and drafting the outreach copy. Where I
-drove: the segmentation thresholds and their rationale, the play precedence
-(`reengage > migrate > grow`), the feature decision tree, and gating health on
-account materiality once the first cut flagged half the book as "dormant" (lumpy
-low-frequency buyers, not churn). The tool itself uses Claude the same way — to
+(spotting that `broker_reliance_pct` disagrees with the counts, that `gmv_trend_pct`
+is half-blank because it divides by a zero Sep, and — the one that changed the
+design — that **handpick buyers out-spend bundle buyers per order**, which killed
+my first "push handpick accounts to bundles" instinct), scaffolding the vectorised
+pandas and the SQLite store, and drafting the outreach copy. Where I drove: the
+segmentation thresholds, the play precedence (`reengage > migrate > grow`), the
+risk-adjusted EV ranking (so exposure isn't ranked as at-risk GMV), the
+data-grounded feature tree, and the cadence gate for dormancy once the first cut
+flagged lumpy buyers as churn. I also ran the finished tool past an adversarial
+scorer and fixed what it found. The tool itself uses Claude the same way — to
 write drafts — behind a fingerprint cache and a heuristic fallback, so it never
 depends on the model being up. Full commit history shows the build order.
 

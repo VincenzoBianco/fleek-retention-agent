@@ -79,6 +79,30 @@ def test_fingerprint_deterministic():
     assert to_accounts(df)[0].fingerprint == to_accounts(df)[0].fingerprint
 
 
+def test_defensive_cleaning_paths_fire_on_messy_input():
+    # These paths don't trigger on the real book (it's clean-ish there), so we
+    # prove them on deliberately messy rows: variant ownership spelling, a
+    # negative value, and a gmv-total that disagrees with the monthly sum.
+    df = clean(pd.DataFrame([
+        raw_row(account_id="V", ownership="  self-serve ", app_active_days_6m=-5),
+        raw_row(account_id="M", gmv_total_6m=9999, gmv_sep=100, gmv_oct=100),  # total != sum
+    ]))
+    accts = {a.account_id: a for a in to_accounts(df)}
+    assert accts["V"].ownership == "Self Serve"          # variant + whitespace normalised
+    assert accts["V"].app_active_days_6m == 0            # negative clipped to 0
+    assert "gmv_total_mismatch" in accts["M"].data_flags  # inconsistency flagged
+
+
+def test_duplicate_account_id_does_not_duplicate():
+    # same id twice in one load -> last wins, one account out
+    df = clean(pd.DataFrame([
+        raw_row(account_id="D", gmv_total_6m=100, gmv_sep=100),
+        raw_row(account_id="D", gmv_total_6m=200, gmv_sep=200),
+    ]))
+    accts = to_accounts(df)
+    assert len(accts) == 1 and accts[0].gmv_total_6m == 200
+
+
 # --- segmentation reads behaviour, not the label -------------------------
 def test_account_managed_but_self_serving_is_not_broker_reliant():
     a = acct(ownership="Account Managed", broker_reliance=5, app_active_days_6m=20, pdp_views_6m=200)
@@ -98,9 +122,15 @@ def test_high_intent_low_spend_is_growth():
 
 
 # --- feature decision tree ------------------------------------------------
-def test_feature_handpick_only_gets_bundles():
-    a = acct(bundle_gmv_share_pct=10, handpick_orders=3)
+def test_feature_low_aov_handpick_gets_bundles():
+    a = acct(bundle_gmv_share_pct=10, handpick_orders=3, aov=200)
     assert choose_feature(a)[0] == "bundles"
+
+
+def test_feature_high_aov_handpick_gets_build_a_bundle():
+    # a valuable handpick buyer should NOT be pushed onto generic bundles
+    a = acct(bundle_gmv_share_pct=10, handpick_orders=3, aov=900)
+    assert choose_feature(a)[0] == "build_a_bundle"
 
 
 def test_feature_offers_not_converting_gets_video():
@@ -112,6 +142,55 @@ def test_feature_heavy_browser_gets_chat():
     a = acct(bundle_gmv_share_pct=80, handpick_orders=0, make_an_offer_6m=0,
              pdp_views_6m=300, chat_threads=0, orders_6m=8)
     assert choose_feature(a)[0] == "chat"
+
+
+# --- health: cadence gate separates churn from lumpy buying ---------------
+def test_lumpy_whale_not_flagged_dormant():
+    # two big early orders then silence — clears the GMV gate, but no rhythm
+    a = acct(account_id="WHALE", gmv_total_6m=70000, orders_6m=2,
+             monthly_gmv=[36000, 34000, 0, 0, 0, 0], momentum_pct=-100)
+    assert classify(a).health == "healthy"   # not "dormant"
+
+
+def test_rhythmic_buyer_gone_silent_is_dormant():
+    # a real cadence (orders across the first half) that then stopped
+    a = acct(account_id="CHURN", gmv_total_6m=9000, orders_6m=6,
+             monthly_gmv=[3000, 3000, 3000, 0, 0, 0], momentum_pct=-100)
+    assert classify(a).health == "dormant"
+
+
+# --- expected-value ranking is comparable across plays --------------------
+def test_migrate_ev_is_far_below_its_exposure_prize():
+    # £ on a human is NOT at-risk; EV must reflect that, not the raw exposure
+    a = acct(account_id="BIG", ownership="Account Managed", broker_reliance=70,
+             app_active_days_6m=1, pdp_views_6m=2, gmv_total_6m=100000,
+             orders_6m=20, monthly_gmv=[20000]*5 + [0])
+    d = decide(a, classify(a))
+    assert d.play == "migrate_to_selfserve"
+    assert d.prize_type == "GMV on a human"
+    assert d.expected_value < d.prize_gmv * 0.1   # discounted hard, not conflated
+    assert d.priority == d.expected_value
+
+
+def test_reengage_prize_is_at_risk_and_ev_uses_save_rate():
+    a = acct(account_id="R", gmv_total_6m=10000, orders_6m=6,
+             monthly_gmv=[3000, 3000, 3000, 500, 0, 0], momentum_pct=-80)
+    d = decide(a, classify(a))
+    assert d.play == "reengage" and d.prize_type == "GMV at risk"
+    assert d.expected_value == round(config.SAVE_RATE * d.prize_gmv, 0)
+
+
+# --- feedback loop: outcomes table ---------------------------------------
+def test_outcomes_recorded_and_rates_computed(tmp_path):
+    store = Store(tmp_path / "s.db")
+    r = store.start_run("run")
+    a = acct(account_id="ACC-1", fingerprint="fp")
+    store.upsert(a, decide(a, classify(a)), "d", False, r)
+    store.commit()
+    store.record_outcome("ACC-1", r, "grow_selfserve", "chat", responded=True, converted=True, gmv_delta=120)
+    rates = store.realized_rates()
+    assert rates["grow_selfserve"]["n"] == 1
+    assert rates["grow_selfserve"]["conversion_rate"] == 1.0
 
 
 # --- idempotency contract -------------------------------------------------
@@ -179,3 +258,23 @@ def test_scale_30k_under_budget():
     elapsed = time.time() - t0
     assert len(decisions) == n
     assert elapsed < 20  # generous ceiling; typically a few seconds
+
+
+def test_store_path_scale_30k(tmp_path):
+    # exercise the persistence path (diff + upsert), not just the compute path
+    store = Store(tmp_path / "s.db")
+    accts = [acct(account_id=f"ACC-{i}", fingerprint=f"fp{i}") for i in range(30_000)]
+    r = store.start_run("scale")
+    t0 = time.time()
+    split = store.diff(accts)                       # first run: all new
+    for a in split["new"]:
+        store.upsert(a, decide(a, classify(a)), "d", False, r)
+    store.commit()
+    write_elapsed = time.time() - t0
+    # second run: identical batch -> diff must classify all as unchanged, fast
+    t1 = time.time()
+    split2 = store.diff(accts)
+    diff_elapsed = time.time() - t1
+    assert len(split2["unchanged"]) == 30_000 and not split2["new"]
+    assert store.counts()["accounts"] == 30_000    # no duplicates
+    assert write_elapsed < 30 and diff_elapsed < 5

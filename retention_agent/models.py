@@ -66,8 +66,14 @@ class Decision(BaseModel):
     action: Optional[str] = None         # the concrete next best action
     reason: str = ""                     # why this account, why this action (explainable)
     feature: Optional[str] = None        # for growth play: chat|bundles|video|build_a_bundle
-    priority: float = 0.0                # ranking score (GMV at stake)
-    gmv_at_stake: float = 0.0
+    # Ranking. We rank on expected_value (a comparable £ across plays); prize_gmv
+    # is the descriptive headline number and prize_type says what it *is*, so the
+    # queue never conflates at-risk GMV with exposure or speculative uplift.
+    priority: float = 0.0                # == expected_value; the ranking key
+    expected_value: float = 0.0          # risk-adjusted expected £ impact / 6mo
+    prize_gmv: float = 0.0               # descriptive headline £ for this account
+    prize_type: str = ""                 # "GMV at risk" | "GMV on a human" | "modelled uplift"
+    gmv_at_stake: float = 0.0            # kept = prize_gmv, for backwards-compatible reporting
     draft: Optional[str] = None          # the drafted message / nudge / call note
     channel: Optional[str] = None        # whatsapp | in_app | call
     fingerprint: str = ""                # account fingerprint this decision was made against
@@ -85,4 +91,5 @@ class RunReport(BaseModel):
     n_actions: int = 0
     segment_counts: dict[str, int] = Field(default_factory=dict)
     play_counts: dict[str, int] = Field(default_factory=dict)
-    gmv_at_stake_total: float = 0.0
+    gmv_at_stake_total: float = 0.0      # sum of descriptive prizes (mixed types)
+    expected_value_total: float = 0.0    # sum of risk-adjusted EV (the comparable number)

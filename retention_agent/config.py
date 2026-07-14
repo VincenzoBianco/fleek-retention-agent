@@ -37,12 +37,16 @@ HANDPICK_ONLY_BUNDLE_SHARE = 25.0  # <= this % bundle spend = basically handpick
 
 # --- Health overlays -------------------------------------------------------
 # This book is lumpy: 158/300 accounts placed a single order in 6 months, so a
-# quiet recent month is normal, not a churn signal. We only flag "dormant" when
-# a *material* buyer that spent in the first half has gone silent for a full
-# quarter — that's a retention emergency worth an AM's time.
+# quiet recent month is normal, not a churn signal. Two gates before we cry
+# "churn": the account must be *material* (real GMV) AND have shown an actual
+# ordering *rhythm* that then stopped. Materiality alone is not enough — a big
+# intermittent buyer (e.g. two large orders then a gap) clears a GMV gate but
+# isn't churning, it's just lumpy. Requiring a cadence separates the two.
 DECLINE_MOMENTUM = -40.0         # last-half vs first-half GMV change % that flags a slide
 DORMANT_RECENT_GMV = 1.0         # <= this over the last 3 months = silent
 MATERIAL_ACCOUNT_GMV = 2000.0    # a "real" buyer worth flagging on health
+RHYTHM_MIN_ORDERS = 4            # ...and an established cadence: this many orders
+RHYTHM_MIN_ACTIVE_MONTHS = 3     # ...across at least this many distinct months
 
 # --- Consistency / cleaning -----------------------------------------------
 # The provided broker_reliance_pct disagrees with the raw order counts on a
@@ -55,18 +59,41 @@ RELIANCE_RECONCILE_TOLERANCE = 10.0  # percentage points
 VIDEO_OFFER_MIN = 3.0            # making this many offers but stalling = wants a call to close
 CHAT_VIEWS_MIN = 150.0          # heavy browser...
 CHAT_THREADS_MAX = 2.0          # ...who isn't talking to us yet = open a chat
+# Handpick buyers are the HIGHER-value cohort in this book (median AOV £682 vs
+# £281 for bundle-led buyers), so we do NOT push a valuable handpick buyer onto
+# generic bundles — that would dilute their AOV. Above this AOV, a handpick-led
+# buyer is nudged to build-a-bundle (scale volume, keep curation); below it,
+# to bundles (a volume play for the price-led).
+HANDPICK_HIGH_AOV = 500.0
 
-# Estimated GMV uplift per feature, used to size the prize and rank the queue.
-# These are deliberately conservative, documented assumptions — not measured
-# (we have no post-nudge outcomes yet). The learning loop would replace them.
-UPLIFT_FACTORS = {
-    "bundles": 0.30,          # basket-size lever: handpick-only -> bundles is the biggest
-    "build_a_bundle": 0.25,   # custom curation for already-engaged buyers
-    "video": 0.20,            # a call closes a stalling, offer-heavy buyer
-    "chat": 0.15,             # opening a conversation with a silent browser
+# Growth uplift, expressed as expected % gain on the account's current GMV.
+# ANCHORED IN THIS BOOK, not invented: self-serve accounts that engage (chat>=5
+# or a video call) have ~2.0x the median GMV of unengaged ones (£493 vs £242 —
+# see analysis.calibrate / `python cli.py calibrate`). That +100% is the ceiling
+# of the engagement gap; each feature is assumed to capture a conservative slice
+# of it. These are correlational priors to size the prize, NOT measured causal
+# lift — the outcomes table (store.record_outcome) is what replaces them.
+GROWTH_UPLIFT_PCT = {
+    "build_a_bundle": 0.35,   # scale a valuable handpick buyer without dropping their AOV
+    "video": 0.30,            # a call converts a stalling, offer-heavy buyer
+    "bundles": 0.20,          # volume play for price-led, low-AOV buyers
+    "chat": 0.20,             # open a conversation with a silent browser
 }
 
+# --- Expected-value ranking -----------------------------------------------
+# The three plays protect/create different kinds of money, so we do NOT rank them
+# on one raw "£ at stake" number (that would put migrate's exposure next to
+# reengage's at-risk GMV next to growth's speculative uplift). Instead each play
+# converts its prize to a comparable *expected £ impact over the next 6 months*
+# via an explicit probability. All priors below are assumptions pending the
+# feedback loop; they're here, labelled, so the ranking is honest.
+SAVE_RATE = 0.35                 # reengage: P(win back a churning account)
+CONVERT_RATE_WARM = 0.50         # migrate: P(warm account self-serves)
+CONVERT_RATE_COLD = 0.30         # migrate: P(cold account self-serves)
+# Migrating doesn't rescue at-risk GMV (that spend continues anyway) — its
+# measurable prize is modest expansion: self-serve buyers who see full stock buy
+# a bit more. Priced conservatively off the same engagement premium.
+MIGRATION_EXPANSION = 0.12       # expected GMV expansion on converted spend
+
 # --- Prioritisation --------------------------------------------------------
-# We rank the action queue by GMV at stake, so the AM's scarce time (and the
-# agent's outreach budget) goes to the accounts that move the number most.
 MIN_GMV_FOR_MIGRATION = 2000.0   # don't spend effort migrating tiny brokered accounts

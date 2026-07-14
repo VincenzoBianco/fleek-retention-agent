@@ -29,9 +29,33 @@ def _run(args):
     print(f"Run #{report.run_id}  ({report.source})")
     print(f"  seen={report.n_seen}  new={report.n_new}  changed={report.n_changed}  "
           f"unchanged/skipped={report.n_unchanged_skipped}")
-    print(f"  actions queued={report.n_actions}  GMV at stake=£{report.gmv_at_stake_total:,.0f}")
+    print(f"  actions queued={report.n_actions}  expected value (risk-adj)=£{report.expected_value_total:,.0f}")
     print(f"  plays: {report.play_counts}")
     print(f"  wrote: {out['csv']}  {out['html']}")
+    store.close()
+
+
+def _calibrate(args):
+    """Print the empirical priors derived from the workbook (the anchors behind
+    the growth uplift numbers in config)."""
+    import json
+    from retention_agent.analysis import calibrate
+    from retention_agent.ingest import load_accounts
+    accts = load_accounts(args.workbook, args.sheet)
+    print(json.dumps(calibrate(accts), indent=2))
+
+
+def _outcome(args):
+    """Log the outcome of an action (feeds the learning loop)."""
+    store = Store(args.db)
+    row = next((r for r in store.all_accounts() if r["account_id"] == args.account_id), None)
+    if not row:
+        print(f"unknown account {args.account_id}"); store.close(); return
+    store.record_outcome(args.account_id, row["decided_run"], row["play"], row["feature"],
+                         sent=True, responded=args.responded, converted=args.converted,
+                         gmv_delta=args.gmv_delta, ts=args.ts or "")
+    print(f"logged outcome for {args.account_id}: responded={args.responded} converted={args.converted}")
+    print("realized rates so far:", store.realized_rates())
     store.close()
 
 
@@ -70,6 +94,19 @@ def main(argv=None):
 
     s = sub.add_parser("status", help="show current book state and run history")
     s.set_defaults(fn=_status)
+
+    c = sub.add_parser("calibrate", help="print empirical priors derived from the book")
+    c.add_argument("workbook")
+    c.add_argument("--sheet", default="Accounts")
+    c.set_defaults(fn=_calibrate)
+
+    o = sub.add_parser("outcome", help="log an action's outcome (feeds the learning loop)")
+    o.add_argument("account_id")
+    o.add_argument("--responded", action="store_true")
+    o.add_argument("--converted", action="store_true")
+    o.add_argument("--gmv-delta", type=float, default=0.0, dest="gmv_delta")
+    o.add_argument("--ts", default="")
+    o.set_defaults(fn=_outcome)
 
     x = sub.add_parser("reset", help="wipe persisted state")
     x.set_defaults(fn=_reset)

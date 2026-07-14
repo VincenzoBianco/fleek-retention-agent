@@ -45,14 +45,21 @@ def _split_frontmatter(text: str) -> tuple[dict, str]:
 # Feature selection for the grow play (the "which nudge" decision tree)
 # --------------------------------------------------------------------------
 def choose_feature(a: Account) -> tuple[str, str]:
-    """Return (feature, reason). One feature per account, ordered by lever size."""
-    if a.bundle_gmv_share_pct <= config.HANDPICK_ONLY_BUNDLE_SHARE and a.handpick_orders >= 1:
-        return "bundles", f"handpick-only ({a.bundle_gmv_share_pct:.0f}% bundle) — bundles lift basket size"
+    """Return (feature, reason). One feature per account, matched to its blocker.
+
+    Note the handpick split: handpick buyers are the higher-AOV cohort here, so a
+    valuable one is scaled via build-a-bundle (keeps curation), not pushed onto
+    generic bundles (which would drop their AOV). Only the price-led, low-AOV
+    handpick buyer gets bundles."""
     if a.make_an_offer_6m >= config.VIDEO_OFFER_MIN and a.orders_6m <= 3:
         return "video", f"{a.make_an_offer_6m:.0f} offers but only {a.orders_6m} orders — a call closes it"
     if a.pdp_views_6m >= config.CHAT_VIEWS_MIN and a.chat_threads <= config.CHAT_THREADS_MAX:
         return "chat", f"{a.pdp_views_6m:.0f} views but {a.chat_threads:.0f} chats — open a conversation"
-    return "build_a_bundle", "engaged with headroom — a custom bundle is the next step"
+    if a.bundle_gmv_share_pct <= config.HANDPICK_ONLY_BUNDLE_SHARE and a.handpick_orders >= 1:
+        if a.aov >= config.HANDPICK_HIGH_AOV:
+            return "build_a_bundle", f"handpick-led, £{a.aov:,.0f} AOV — scale via curated bundles, keep the AOV"
+        return "bundles", f"handpick-led, £{a.aov:,.0f} AOV — a volume bundle play fits a price-led buyer"
+    return "build_a_bundle", "engaged with headroom — a curated bundle is the next step"
 
 
 # --------------------------------------------------------------------------
@@ -64,40 +71,48 @@ def decide(a: Account, seg: SegmentResult) -> Decision:
                 fingerprint=a.fingerprint)
 
     # 1. Retention guardrail — churning material account, any segment.
+    #    Prize is genuinely at-risk GMV; EV discounts by our win-back rate.
     if material and seg.health in ("dormant", "declining"):
         at_risk = round(a.gmv_total_6m, 0)
+        ev = round(config.SAVE_RATE * at_risk, 0)
         gap = "silent for a quarter" if seg.health == "dormant" else f"spend down {abs(a.momentum_pct or 0):.0f}%"
         return Decision(**base, play="reengage", channel="call",
-                        action="Win-back call with a concrete hook (fresh stock in their category)",
+                        action="Win-back call: find what changed, bring one concrete hook (fresh stock in their lines)",
                         reason=f"£{at_risk:,.0f} at risk — {gap}",
-                        priority=at_risk, gmv_at_stake=at_risk)
+                        prize_type="GMV at risk", prize_gmv=at_risk, gmv_at_stake=at_risk,
+                        expected_value=ev, priority=ev)
 
-    # 2. Migrate broker-reliant material accounts.
+    # 2. Migrate broker-reliant material accounts. NB the £ on a human is NOT at
+    #    risk — that spend continues if we do nothing. The prize of migrating is
+    #    modest expansion on the converted spend, discounted by conversion rate.
     if seg.segment == "broker_reliant":
         if not material:
             return Decision(**base, play=None,
                             reason=f"broker-reliant but only £{a.gmv_total_6m:,.0f} — below migration floor, batch later")
         on_a_human = round(a.gmv_total_6m * a.broker_reliance / 100, 0)
+        convert = config.CONVERT_RATE_WARM if seg.subtype == "warm" else config.CONVERT_RATE_COLD
+        ev = round(convert * on_a_human * config.MIGRATION_EXPANSION, 0)
         if seg.subtype == "warm":
-            action = "Nudge next reorder in-app: pre-load usual SKUs into a ready basket"
+            action = "Nudge next reorder in-app: pre-load usual lines into a ready basket"
             channel = "whatsapp"
         else:
-            action = "Book a 10-min guided first order; pre-load usual SKUs to make the app easier than messaging"
+            action = "Book a 10-min guided first order; pre-load usual lines so the app beats messaging"
             channel = "call"
         return Decision(**base, play="migrate_to_selfserve", channel=channel, action=action,
                         reason=f"£{on_a_human:,.0f} of GMV riding on a human ({a.broker_reliance:.0f}% broker-placed); {seg.reasons[-1]}",
-                        priority=on_a_human, gmv_at_stake=on_a_human)
+                        prize_type="GMV on a human", prize_gmv=on_a_human, gmv_at_stake=on_a_human,
+                        expected_value=ev, priority=ev)
 
-    # 3. Grow self-serve accounts with headroom.
+    # 3. Grow self-serve accounts with headroom. Prize is MODELLED uplift (a
+    #    conservative slice of the engagement premium), not money in hand.
     if seg.segment == "self_serve_growth":
         feature, why = choose_feature(a)
-        uplift = round(a.gmv_total_6m * config.UPLIFT_FACTORS[feature], 0)
-        # a floor so tiny accounts still show a sensible prize to rank by
-        uplift = max(uplift, config.UPLIFT_FACTORS[feature] * 500)
+        uplift = round(a.gmv_total_6m * config.GROWTH_UPLIFT_PCT[feature], 0)
         return Decision(**base, play="grow_selfserve", channel="whatsapp", feature=feature,
                         action=f"Nudge {feature.replace('_', ' ')}: {_feature_offer(feature)}",
                         reason=why,
-                        priority=uplift, gmv_at_stake=uplift)
+                        prize_type="modelled uplift", prize_gmv=uplift, gmv_at_stake=uplift,
+                        expected_value=uplift, priority=uplift)
 
     # 4. Everyone else — healthy and self-serving, or assisted-but-fine. Leave alone.
     return Decision(**base, play=None,

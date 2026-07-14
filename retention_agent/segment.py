@@ -34,13 +34,16 @@ class SegmentResult:
 def _health(a: Account) -> str:
     first_half = sum(a.monthly_gmv[:3])
     last_quarter = sum(a.monthly_gmv[-3:])
-    # A material buyer that was spending and has been silent for a quarter.
+    active_months = sum(1 for m in a.monthly_gmv if m > 0)
     material = a.gmv_total_6m >= config.MATERIAL_ACCOUNT_GMV
-    if material and first_half > 0 and last_quarter <= config.DORMANT_RECENT_GMV:
+    # A real churn signal needs materiality AND a broken rhythm. A big
+    # intermittent buyer (two large orders, then a gap) clears the GMV gate but
+    # is lumpy, not churning — the cadence gate is what tells them apart.
+    rhythm = (a.orders_6m >= config.RHYTHM_MIN_ORDERS
+              and active_months >= config.RHYTHM_MIN_ACTIVE_MONTHS)
+    if material and rhythm and first_half > 0 and last_quarter <= config.DORMANT_RECENT_GMV:
         return "dormant"
-    # Only alarm on a slide for material buyers — a £150 one-order account
-    # bouncing month to month isn't a retention concern.
-    if material and a.momentum_pct is not None and a.momentum_pct <= config.DECLINE_MOMENTUM:
+    if material and rhythm and a.momentum_pct is not None and a.momentum_pct <= config.DECLINE_MOMENTUM:
         return "declining"
     return "healthy"
 
