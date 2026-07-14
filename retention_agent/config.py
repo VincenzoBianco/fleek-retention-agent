@@ -102,3 +102,7 @@ MIGRATION_EXPANSION = 0.12       # expected GMV expansion on converted spend
 
 # --- Prioritisation --------------------------------------------------------
 MIN_GMV_FOR_MIGRATION = 2000.0   # don't spend effort migrating tiny brokered accounts
+# Above this, a broker-reliant account is a "whale": the downside of a botched
+# migration (spend wobbles while they learn the app) outweighs the modelled
+# expansion, so we never auto-nudge it — it's a phased, AM-shadowed handover.
+WHALE_GMV = 25000.0

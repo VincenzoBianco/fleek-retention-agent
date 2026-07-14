@@ -102,7 +102,13 @@ def decide(a: Account, seg: SegmentResult) -> Decision:
         on_a_human = round(a.gmv_total_6m * a.broker_reliance / 100, 0)
         convert = config.CONVERT_RATE_WARM if seg.subtype == "warm" else config.CONVERT_RATE_COLD
         ev = round(convert * on_a_human * config.MIGRATION_EXPANSION, 0)
-        if seg.subtype == "warm":
+        if a.gmv_total_6m >= config.WHALE_GMV:
+            # Too much spend to risk on a self-serve nudge — hand over in phases
+            # with the AM shadowing, so a wobble doesn't cost the account.
+            action = ("Phased, AM-shadowed handover: co-place the next 1-2 orders in-app together, "
+                      "then hand the reins — keep the AM on every order until self-serve sticks")
+            channel = "call"
+        elif seg.subtype == "warm":
             action = "Nudge next reorder in-app: pre-load usual lines into a ready basket"
             channel = "whatsapp"
         else:

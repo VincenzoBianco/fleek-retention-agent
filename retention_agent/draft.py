@@ -46,11 +46,18 @@ def _scale(a: Account) -> str:
 # --------------------------------------------------------------------------
 def heuristic_draft(a: Account, d: Decision) -> str:
     if d.play == "reengage":
-        gap = "silent for a quarter" if d.health == "dormant" else f"spend down {abs(a.momentum_pct or 0):.0f}%"
-        return (f"Call note — {_ctx(a)}. {gap.capitalize()}. "
-                f"Goal: find what changed (supply gap, pricing, a bad last order, or drifted to an "
-                f"offline wholesaler) and bring one concrete hook — fresh stock in their usual lines. "
-                f"Acknowledge the gap, ask an open question, don't sell hard.")
+        if d.health == "dormant":
+            gap = "no order in the last quarter after a steady run"
+            opener = "acknowledge the gap directly (\"noticed you've paused since the autumn\")"
+        else:
+            gap = "orders tailing off (run-rate sliding)"
+            opener = "note the slowdown gently, not the total (\"seen a few quieter weeks\")"
+        who = "their shop's footfall/season" if (a.buyer_persona or "").lower() == "retailer" else "their resale velocity"
+        broker = (" NB high broker-reliance — check whether this is the AM easing off vs real demand loss."
+                  if a.broker_reliance >= 50 else "")
+        return (f"Call note — {_ctx(a)}. {gap.capitalize()}. Open by {opener}; ask what changed for "
+                f"{who} (supply gap, pricing, a bad last order, or drifted to an offline wholesaler) and "
+                f"bring one concrete hook — fresh stock in their lines. Don't sell hard.{broker}")
 
     if d.play == "migrate_to_selfserve":
         if d.channel == "whatsapp":  # warm
