@@ -100,6 +100,14 @@ CONVERT_RATE_COLD = 0.30         # migrate: P(cold account self-serves)
 # a bit more. Priced conservatively off the same engagement premium.
 MIGRATION_EXPANSION = 0.12       # expected GMV expansion on converted spend
 
+# --- Learning loop: causal holdout ----------------------------------------
+# A fraction of would-be-actioned accounts are held back as a control group
+# (deterministically, by a hash of account_id — no randomness, so it's stable
+# across runs). Their intended play is recorded but no outreach fires, so
+# comparing treated-vs-holdout GMV in the outcomes table turns the growth uplift
+# priors from a correlation into a measured, causal lift. Set 0 to disable.
+HOLDOUT_FRACTION = 0.10
+
 # --- Prioritisation --------------------------------------------------------
 MIN_GMV_FOR_MIGRATION = 2000.0   # don't spend effort migrating tiny brokered accounts
 # Above this, a broker-reliant account is a "whale": the downside of a botched

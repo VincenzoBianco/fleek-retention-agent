@@ -46,6 +46,7 @@ class Store:
                 priority     REAL, gmv_at_stake REAL,
                 expected_value REAL, prize_type TEXT,
                 draft        TEXT, used_llm INTEGER DEFAULT 0,
+                holdout      INTEGER DEFAULT 0, source_ts REAL DEFAULT 0,
                 first_seen_run INTEGER, last_seen_run INTEGER, decided_run INTEGER
             );
             CREATE TABLE IF NOT EXISTS runs (
@@ -82,42 +83,52 @@ class Store:
         self.db.commit()
 
     # --- the idempotency diff ---
-    def diff(self, accounts: list[Account]) -> dict[str, list[Account]]:
-        """Split an incoming batch into new / changed / unchanged."""
-        rows = self.db.execute("SELECT account_id, fingerprint FROM accounts").fetchall()
-        known = {row["account_id"]: row["fingerprint"] for row in rows}
-        out = {"new": [], "changed": [], "unchanged": []}
+    def diff(self, accounts: list[Account], source_ts: float = 0.0) -> dict[str, list[Account]]:
+        """Split an incoming batch into new / changed / unchanged / stale.
+
+        `stale` = the account changed, but this batch's source is OLDER than the
+        one behind the stored decision, so we refuse to overwrite fresher data
+        with staler (enforced newest-source-wins, not just a README caveat).
+        Pass source_ts=0 to disable the guard (every differing row is 'changed')."""
+        rows = self.db.execute("SELECT account_id, fingerprint, source_ts FROM accounts").fetchall()
+        known = {r["account_id"]: (r["fingerprint"], r["source_ts"] or 0) for r in rows}
+        out = {"new": [], "changed": [], "unchanged": [], "stale": []}
         for a in accounts:
             if a.account_id not in known:
                 out["new"].append(a)
-            elif known[a.account_id] != a.fingerprint:
-                out["changed"].append(a)
-            else:
+                continue
+            stored_fp, stored_ts = known[a.account_id]
+            if stored_fp == a.fingerprint:
                 out["unchanged"].append(a)
+            elif source_ts and source_ts < stored_ts:
+                out["stale"].append(a)      # older source — don't clobber fresher data
+            else:
+                out["changed"].append(a)
         return out
 
     # --- writes ---
-    def upsert(self, a: Account, d: Decision, draft: str, used_llm: bool, run_id: int):
+    def upsert(self, a: Account, d: Decision, draft: str, used_llm: bool, run_id: int,
+               source_ts: float = 0.0):
         self.db.execute(
             """
             INSERT INTO accounts (account_id, fingerprint, ownership, region, persona,
                 gmv_total, segment, health, play, feature, channel, action, reason,
                 priority, gmv_at_stake, expected_value, prize_type, draft, used_llm,
-                first_seen_run, last_seen_run, decided_run)
+                holdout, source_ts, first_seen_run, last_seen_run, decided_run)
             VALUES (:aid, :fp, :own, :reg, :per, :gmv, :seg, :hea, :play, :feat, :chan,
-                :act, :rea, :pri, :stake, :ev, :ptype, :draft, :llm, :run, :run, :run)
+                :act, :rea, :pri, :stake, :ev, :ptype, :draft, :llm, :hold, :ts, :run, :run, :run)
             ON CONFLICT(account_id) DO UPDATE SET
                 fingerprint=:fp, ownership=:own, region=:reg, persona=:per, gmv_total=:gmv,
                 segment=:seg, health=:hea, play=:play, feature=:feat, channel=:chan,
                 action=:act, reason=:rea, priority=:pri, gmv_at_stake=:stake,
-                expected_value=:ev, prize_type=:ptype,
-                draft=:draft, used_llm=:llm, last_seen_run=:run, decided_run=:run
+                expected_value=:ev, prize_type=:ptype, draft=:draft, used_llm=:llm,
+                holdout=:hold, source_ts=:ts, last_seen_run=:run, decided_run=:run
             """,
             dict(aid=a.account_id, fp=a.fingerprint, own=a.ownership, reg=a.region,
                  per=a.buyer_persona, gmv=a.gmv_total_6m, seg=d.segment, hea=d.health,
                  play=d.play, feat=d.feature, chan=d.channel, act=d.action, rea=d.reason,
                  pri=d.priority, stake=d.gmv_at_stake, ev=d.expected_value, ptype=d.prize_type,
-                 draft=draft, llm=int(used_llm), run=run_id),
+                 draft=draft, llm=int(used_llm), hold=int(d.holdout), ts=source_ts, run=run_id),
         )
 
     def touch_seen(self, account_ids: list[str], run_id: int):
@@ -132,10 +143,15 @@ class Store:
 
     # --- reads (for reporting / export) ---
     def action_queue(self, limit: int | None = None) -> list[dict]:
-        q = "SELECT * FROM accounts WHERE play IS NOT NULL ORDER BY expected_value DESC"
+        # Holdout accounts have an intended play but are a control group — no
+        # outreach, so they never appear in the queue an AM works from.
+        q = "SELECT * FROM accounts WHERE play IS NOT NULL AND holdout=0 ORDER BY expected_value DESC"
         if limit:
             q += f" LIMIT {int(limit)}"
         return [dict(r) for r in self.db.execute(q).fetchall()]
+
+    def holdout_count(self) -> int:
+        return self.db.execute("SELECT COUNT(*) c FROM accounts WHERE holdout=1").fetchone()["c"]
 
     def record_outcome(self, account_id: str, run_id: int, play: str, feature: str | None,
                        sent=True, responded=False, converted=False, gmv_delta=0.0, ts="") -> None:

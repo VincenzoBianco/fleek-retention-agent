@@ -34,7 +34,8 @@ changed accounts are touched.
 | **22** material accounts genuinely churning (`reengage`) | **£120k** of *forward* GMV at risk (run-rate lost, not lifetime) |
 | **125** self-serve growth nudges | video 48 · build-a-bundle 42 · chat 18 · bundles 17 |
 | **85 / 300** accounts had a `broker_reliance_pct` that disagreed with their order counts | recomputed from counts, flagged in the decision |
-| Whole book ranked by **risk-adjusted expected value** | **£86k** of expected 6-month impact, honestly comparable across the three plays |
+| Whole book ranked by **risk-adjusted expected value** | **£80k** of expected 6-month impact, honestly comparable across the three plays |
+| **~10%** of would-be-actioned accounts held back as a **control group** | so growth lift can be measured, not assumed (leaves ~162 in the AM's queue) |
 
 ## Quickstart
 
@@ -67,7 +68,7 @@ Add `--llm` to have Claude write the drafts (needs `ANTHROPIC_API_KEY`); without
 it, drafts are templated — real and personalised, just not model-written.
 
 ```bash
-pip install -r requirements-dev.txt && python -m pytest -q   # 12 tests
+pip install -r requirements-dev.txt && python -m pytest -q   # 25 tests
 ```
 
 ## How it works
@@ -96,9 +97,12 @@ flowchart LR
 human: cleaning, segmentation, the play decision, and the draft. A person (or a
 messaging agent) only enters at the end — to send the drafted message, make the
 call, or tweak a draft. The `reason` on every row is there so that hand-off is a
-5-second read, not a re-investigation. The dashed line is where this would grow
-next: capturing whether the action landed, to reweight the plays (the priors in
-`data/plays/*.md` become learned).
+5-second read, not a re-investigation. The dashed line is the learning loop: the
+`outcomes` table logs whether each action landed, and a ~10% deterministic
+**holdout** (control group, no outreach) is set aside so the effect can be
+measured against a baseline rather than assumed. Closing it — auto-reweighting
+the priors in `data/plays/*.md` from measured rates — is the next step; the
+plumbing (outcomes + control arm) is already in.
 
 ### Module map
 
@@ -193,11 +197,17 @@ shaped the growth logic:
   vectorised pandas; decisioning is a single O(n) pass; SQLite handles the rows
   trivially. Two tests pin these paths. The only per-account external cost is LLM
   drafting — off by default, cached by fingerprint when on, Batch API next.
-- **Re-run ordering is last-write-wins by design.** A batch updates an account by
-  `account_id`; if you re-ingested the *older* main sheet after `new_accounts` had
-  refreshed the 5 overlaps, it would write the staler figures back. In production
-  you'd feed ingests newest-last (or carry a source timestamp and guard on it);
-  for the demo, run `Accounts` then `new_accounts`, as intended.
+- **Re-run ordering is newest-source-wins, enforced.** Each account stores the
+  recency of the source behind its decision (the workbook's mtime by default,
+  or `--source-ts`). If a batch restates an account from an *older* source than
+  the stored one, the diff routes it to `stale` and refuses to overwrite fresher
+  data — so re-ingesting last month's *file* can't silently revert this month's.
+  Verified by `test_stale_source_does_not_overwrite_fresher_data`. One honest
+  edge: the two demo tabs live in **one workbook**, so they share a single mtime
+  — the guard can't arbitrate *between tabs of the same file* (pass `--source-ts`
+  to force it). In production each morning's file has its own timestamp, so the
+  guard bites; feed the tabs in the intended order (`Accounts` then
+  `new_accounts`) for the demo.
 
 ## The debrief
 
@@ -239,9 +249,15 @@ Being honest about where this is thin matters more than a confident headline:
   ordering depends on these numbers. The `outcomes` table + `cli.py outcome` exist
   to replace them with measured accept/convert rates — that's the first thing I'd
   wire live, and it's why the ranking is labelled "expected value", not "£ at stake".
-- **Growth uplift is correlational.** Engaged accounts spending 2x doesn't prove a
-  nudge *causes* the lift (selection bias — engaged buyers may just be keener). It
-  sizes the prize defensibly; a holdout would be needed to claim causal lift.
+- **Growth uplift is correlational — but a holdout is wired to fix that.** Engaged
+  accounts spending 2x doesn't *prove* a nudge causes the lift (selection bias —
+  engaged buyers may just be keener). So ~10% of would-be-actioned accounts are
+  held back as a deterministic control group (`plays.is_holdout`, seeded by a hash
+  of `account_id` so it's stable across runs): their intended play is recorded but
+  no outreach fires. Once outcomes accrue, comparing treated-vs-holdout GMV in the
+  `outcomes` table turns the correlational prior into a measured, causal lift. The
+  loop isn't closed yet (rates don't auto-feed `config`), but the control arm it
+  needs is in place, not hand-waved.
 - **Six months is short for cadence.** The health gates (a rhythm-then-silence
   cadence gate, plus a recovery guard so a rebounded month isn't called "at risk")
   are the right shape, but with a longer history I'd model each account's own

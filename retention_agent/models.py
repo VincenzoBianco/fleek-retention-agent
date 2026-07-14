@@ -76,6 +76,7 @@ class Decision(BaseModel):
     gmv_at_stake: float = 0.0            # kept = prize_gmv, for backwards-compatible reporting
     draft: Optional[str] = None          # the drafted message / nudge / call note
     channel: Optional[str] = None        # whatsapp | in_app | call
+    holdout: bool = False                # control group: intended play recorded, no outreach fires
     fingerprint: str = ""                # account fingerprint this decision was made against
 
 
@@ -88,7 +89,9 @@ class RunReport(BaseModel):
     n_new: int = 0
     n_changed: int = 0
     n_unchanged_skipped: int = 0
+    n_stale_skipped: int = 0             # differing but from an older source — not overwritten
     n_actions: int = 0
+    n_holdout: int = 0                   # control-group accounts (intended play, no outreach)
     segment_counts: dict[str, int] = Field(default_factory=dict)
     play_counts: dict[str, int] = Field(default_factory=dict)
     gmv_at_stake_total: float = 0.0      # sum of descriptive prizes (mixed types)

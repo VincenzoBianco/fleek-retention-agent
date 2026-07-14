@@ -197,6 +197,46 @@ def test_reengage_prize_is_at_risk_and_ev_uses_save_rate():
     assert d.expected_value == round(config.SAVE_RATE * d.prize_gmv, 0)
 
 
+# --- causal holdout -------------------------------------------------------
+def test_holdout_is_deterministic_and_excluded_from_queue(tmp_path):
+    from retention_agent.plays import is_holdout
+    # deterministic: same id -> same verdict across calls
+    ids = [f"ACC-{i}" for i in range(200)]
+    assert [is_holdout(i) for i in ids] == [is_holdout(i) for i in ids]
+    held = [i for i in ids if is_holdout(i)]
+    assert 0 < len(held) < len(ids)               # some held out, not all
+    # a held-out account keeps its intended play but never enters the queue
+    store = Store(tmp_path / "s.db")
+    r = store.start_run("run")
+    for i in ids:
+        a = acct(account_id=i, fingerprint=i, ownership="Account Managed", broker_reliance=70,
+                 app_active_days_6m=1, pdp_views_6m=2, gmv_total_6m=40000, orders_6m=10,
+                 monthly_gmv=[8000, 8000, 8000, 8000, 8000, 0])
+        d = decide(a, classify(a))
+        store.upsert(a, d, "", False, r)
+    store.commit()
+    queue_ids = {row["account_id"] for row in store.action_queue()}
+    assert not (set(held) & queue_ids)            # no holdout account in the queue
+    assert store.holdout_count() == len(held)
+
+
+# --- newest-source-wins guard --------------------------------------------
+def test_stale_source_does_not_overwrite_fresher_data(tmp_path):
+    store = Store(tmp_path / "s.db")
+    a = acct(account_id="ACC-1", fingerprint="v2")
+    r = store.start_run("fresh")
+    store.upsert(a, decide(a, classify(a)), "", False, r, source_ts=100.0)
+    store.commit()
+    # an older source restating the same account with different data -> stale, skipped
+    older = acct(account_id="ACC-1", fingerprint="v1-old")
+    split = store.diff([older], source_ts=50.0)
+    assert split["stale"] == [older] and not split["changed"]
+    # a newer source is applied normally
+    newer = acct(account_id="ACC-1", fingerprint="v3-new")
+    split = store.diff([newer], source_ts=150.0)
+    assert split["changed"] == [newer] and not split["stale"]
+
+
 # --- feedback loop: outcomes table ---------------------------------------
 def test_outcomes_recorded_and_rates_computed(tmp_path):
     store = Store(tmp_path / "s.db")

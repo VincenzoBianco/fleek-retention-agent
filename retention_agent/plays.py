@@ -12,6 +12,7 @@ Stabilise a churning material account before trying to migrate or upsell it.
 """
 from __future__ import annotations
 
+import hashlib
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,6 +21,16 @@ import yaml
 from . import config
 from .models import Account, Decision
 from .segment import SegmentResult
+
+
+def is_holdout(account_id: str) -> bool:
+    """Deterministic control-group membership — a stable hash of the id, so the
+    same accounts are held out every run (no randomness, which would also break
+    idempotency). ~HOLDOUT_FRACTION of accounts return True."""
+    if config.HOLDOUT_FRACTION <= 0:
+        return False
+    bucket = int(hashlib.sha1(account_id.encode()).hexdigest(), 16) % 1000
+    return bucket < config.HOLDOUT_FRACTION * 1000
 
 
 @lru_cache(maxsize=1)
@@ -66,6 +77,17 @@ def choose_feature(a: Account) -> tuple[str, str]:
 # Play selection
 # --------------------------------------------------------------------------
 def decide(a: Account, seg: SegmentResult) -> Decision:
+    d = _decide(a, seg)
+    # Hold a stable slice of would-be-actioned accounts back as a control group:
+    # keep the intended play/prize (so lift can be measured later) but flag it so
+    # no outreach fires and it's excluded from the action queue.
+    if d.play and is_holdout(a.account_id):
+        d.holdout = True
+        d.reason = f"HOLDOUT (control) — intended: {d.play}; suppressed to measure lift"
+    return d
+
+
+def _decide(a: Account, seg: SegmentResult) -> Decision:
     material = a.gmv_total_6m >= config.MATERIAL_ACCOUNT_GMV
     base = dict(account_id=a.account_id, segment=seg.segment, health=seg.health,
                 fingerprint=a.fingerprint)

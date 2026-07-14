@@ -21,20 +21,22 @@ from .store import Store
 
 
 def run(source_path: str | Path, sheet: str, store: Store,
-        use_llm: bool = False, workers: int = 8) -> RunReport:
+        use_llm: bool = False, workers: int = 8, source_ts: float = 0.0) -> RunReport:
     accounts = load_accounts(source_path, sheet)
     run_id = store.start_run(f"{Path(source_path).name}:{sheet}")
 
-    split = store.diff(accounts)
+    split = store.diff(accounts, source_ts=source_ts)
     to_decide = split["new"] + split["changed"]
 
     decisions = {a.account_id: decide(a, classify(a)) for a in to_decide}
 
-    # Draft only accounts that have a play. Heuristics are instant; when the LLM
-    # is on we fan the calls out across a thread pool so a live run stays snappy.
+    # Draft only accounts that have a play AND aren't in the control group.
+    # Heuristics are instant; with the LLM on we fan the calls out across a
+    # thread pool so a live run stays snappy.
     llm = LLM() if use_llm else None
     plays_md = load_plays()
-    actioned = [a for a in to_decide if decisions[a.account_id].play]
+    actioned = [a for a in to_decide
+                if decisions[a.account_id].play and not decisions[a.account_id].holdout]
 
     def _mk(a):
         dec = decisions[a.account_id]
@@ -53,7 +55,7 @@ def run(source_path: str | Path, sheet: str, store: Store,
 
     for a in to_decide:
         text, used = drafts.get(a.account_id, ("", False))
-        store.upsert(a, decisions[a.account_id], text, used, run_id)
+        store.upsert(a, decisions[a.account_id], text, used, run_id, source_ts=source_ts)
     store.touch_seen([a.account_id for a in split["unchanged"]], run_id)
     store.commit()
 
@@ -66,7 +68,9 @@ def run(source_path: str | Path, sheet: str, store: Store,
         n_new=len(split["new"]),
         n_changed=len(split["changed"]),
         n_unchanged_skipped=len(split["unchanged"]),
+        n_stale_skipped=len(split["stale"]),
         n_actions=len(queue),
+        n_holdout=store.holdout_count(),
         segment_counts=store.segment_counts(),
         play_counts=store.play_counts(),
         gmv_at_stake_total=sum(r["gmv_at_stake"] or 0 for r in queue),

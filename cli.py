@@ -24,12 +24,16 @@ from retention_agent.store import Store
 
 def _run(args):
     store = Store(args.db)
-    report = run_loop(args.workbook, args.sheet, store, use_llm=args.llm)
+    # Default the source timestamp to the workbook's mtime so newer files win on
+    # a re-run without the user having to think about it (--source-ts overrides).
+    ts = args.source_ts if args.source_ts else Path(args.workbook).stat().st_mtime
+    report = run_loop(args.workbook, args.sheet, store, use_llm=args.llm, source_ts=ts)
     out = write_all(store, report, Path(args.out))
     print(f"Run #{report.run_id}  ({report.source})")
     print(f"  seen={report.n_seen}  new={report.n_new}  changed={report.n_changed}  "
-          f"unchanged/skipped={report.n_unchanged_skipped}")
-    print(f"  actions queued={report.n_actions}  expected value (risk-adj)=£{report.expected_value_total:,.0f}")
+          f"unchanged/skipped={report.n_unchanged_skipped}  stale/skipped={report.n_stale_skipped}")
+    print(f"  actions queued={report.n_actions}  holdout(control)={report.n_holdout}  "
+          f"expected value (risk-adj)=£{report.expected_value_total:,.0f}")
     print(f"  plays: {report.play_counts}")
     print(f"  wrote: {out['csv']}  {out['html']}")
     store.close()
@@ -93,6 +97,8 @@ def main(argv=None):
     r.add_argument("--sheet", default="Accounts")
     r.add_argument("--llm", action="store_true", help="use Claude to draft (needs ANTHROPIC_API_KEY)")
     r.add_argument("--out", default=str(config.OUT_DIR))
+    r.add_argument("--source-ts", type=float, default=0.0, dest="source_ts",
+                   help="source recency (epoch); newer wins on re-run. Defaults to file mtime.")
     r.set_defaults(fn=_run)
 
     s = sub.add_parser("status", help="show current book state and run history")
