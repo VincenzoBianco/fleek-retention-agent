@@ -15,16 +15,20 @@ feature most likely to move its basket.
 
 ## Feature selection (which nudge)
 
-One feature per account, picked by behaviour, in this order:
+One feature per account, picked by behaviour, in this code order (see
+`plays.choose_feature`):
 
-1. **bundles** — buys handpicks only (low bundle share) with some order volume.
-   Basket-size is the biggest lever; bundles raise units per order.
-2. **video** — making lots of offers but not converting. They're stuck on price
-   or trust; a quick video call closes it.
-3. **chat** — heavy browser who hasn't started a conversation. Open a chat to
+1. **video** — making lots of offers but not converting (offers high, orders
+   low). They're stuck on price or trust; a quick video call closes it.
+2. **chat** — heavy browser who hasn't started a conversation. Open a chat to
    surface stock and answer the question keeping them from buying.
-4. **build_a_bundle** — already somewhat engaged with headroom; push a custom
-   curated bundle as the growth motion.
+3. **handpick-led buyer → split by value.** In this book handpick buyers have
+   the *higher* AOV (£682 vs £281 for bundle-led), so we don't dilute a valuable
+   one with generic bundles:
+   - **build_a_bundle** if their AOV is high — scale volume, keep the curation.
+   - **bundles** if their AOV is low — a volume play for a price-led buyer.
+4. **build_a_bundle** (fallback) — engaged with headroom; a curated bundle is
+   the natural next step.
 
 ## Offer
 

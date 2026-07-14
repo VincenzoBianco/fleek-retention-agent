@@ -30,11 +30,11 @@ changed accounts are touched.
 | | |
 |---|---|
 | **128 of 210** account-managed accounts actually **behave self-serve** | label ≠ behaviour, so we never trust the label |
-| **33** material broker-reliant accounts to migrate now | **£341k** of GMV riding on a human (exposure, not at-risk) |
-| **25** material accounts genuinely churning (`reengage`) | **£196k** of GMV at risk |
+| **36** material broker-reliant accounts to migrate now | **£364k** of GMV riding on a human (exposure, not at-risk) |
+| **22** material accounts genuinely churning (`reengage`) | **£120k** of *forward* GMV at risk (run-rate lost, not lifetime) |
 | **125** self-serve growth nudges | video 48 · build-a-bundle 42 · chat 18 · bundles 17 |
-| **85 / 300** accounts had a `broker_reliance_pct` that disagreed with their order counts | recomputed from counts, flagged |
-| Whole book ranked by **risk-adjusted expected value** | **£111k** of expected 6-month impact, honestly comparable across the three plays |
+| **85 / 300** accounts had a `broker_reliance_pct` that disagreed with their order counts | recomputed from counts, flagged in the decision |
+| Whole book ranked by **risk-adjusted expected value** | **£86k** of expected 6-month impact, honestly comparable across the three plays |
 
 ## Quickstart
 
@@ -152,7 +152,14 @@ as priors pending the feedback loop):
 
 The report shows both, so the queue never hides which is which. That's why ACC-001
 (£118k on a human) sits *below* smaller genuinely-at-risk accounts in the queue —
-correctly.
+correctly. `reengage`'s at-risk £ is *forward* exposure (the run-rate we're losing
+× 6 months, capped at window GMV), not full lifetime GMV — an account still
+ordering £1.8k/mo doesn't have its whole £18k window at risk.
+
+These probability priors are assumptions, so `python cli.py calibrate` also runs a
+**sensitivity check**: within a play the ranking is prior-invariant (EV = prior ×
+GMV term), and perturbing every prior ±30% barely moves the top-20 play mix — the
+headline ordering isn't balanced on a knife-edge.
 
 ### Which feature to nudge — grounded in the book, not assumed
 
@@ -184,17 +191,19 @@ shaped the growth logic:
 ## The debrief
 
 **First 30 days.** *Week 1:* run it on the inherited book, work the top of the
-action queue by expected value — the 25 genuinely-churning accounts (`reengage`,
-£196k at risk) first, then the 33 migration targets. *Week 4:* it's the morning
-job — I open `out/index.html`, the new/changed accounts are already decided and
-drafted, and I spend my time on the handful of big accounts that genuinely need a
-human, not on re-triaging the whole book.
+action queue by expected value — the 22 genuinely-churning accounts (`reengage`,
+£120k of forward GMV at risk) first, then the 36 migration targets. *Week 4:* it's
+the morning job — I open `out/index.html`, the new/changed accounts are already
+decided and drafted, and I spend my time on the handful of big accounts that
+genuinely need a human, not on re-triaging the whole book.
 
-**Migration.** The 33 material broker-reliant accounts, ranked by expected value
+**Migration.** The 36 material broker-reliant accounts, ranked by expected value
 (conversion probability × the exposure × modest expansion — *not* the raw £ on a
 human, which isn't at risk). Warm ones (they already browse) get a one-tap in-app
 reorder nudge; cold ones get a 10-minute guided first order with their usual lines
-pre-loaded. The AM stays a safety net for the first order so spend doesn't wobble.
+pre-loaded. The biggest (>£25k) get a phased, AM-shadowed handover rather than a
+nudge — the downside of a wobble outweighs the upside. The AM stays a safety net
+for the first order so spend doesn't slip.
 
 **Growth.** The 125 self-serve accounts with headroom, each matched to one feature
 by behaviour: offers-but-no-orders → video (close on a call), heavy-browser-not-
@@ -203,10 +212,11 @@ diluting AOV), a price-led handpick buyer → bundles. One nudge per account, no
 menu.
 
 **Health.** Healthiest = self-serving, engaged, spending, stable. We leave 117
-accounts alone *on purpose*. The unhealthy ones are the 25 material accounts with a
+accounts alone *on purpose*. The unhealthy ones are the 22 material accounts with a
 broken ordering rhythm (dormant/declining) — separated from lumpy low-frequency
-buyers by the cadence gate, which is why `reengage` can outrank everything without
-crying wolf on a whale between drops.
+buyers by the cadence gate, and from mid-window dips that already rebounded by the
+recovery guard, which is why `reengage` can outrank everything without crying wolf
+on a whale between drops or an account that bounced back last month.
 
 ## Limitations (what I'd poke at next)
 
@@ -221,9 +231,15 @@ Being honest about where this is thin matters more than a confident headline:
 - **Growth uplift is correlational.** Engaged accounts spending 2x doesn't prove a
   nudge *causes* the lift (selection bias — engaged buyers may just be keener). It
   sizes the prize defensibly; a holdout would be needed to claim causal lift.
-- **Six months is short for cadence.** The dormancy cadence gate (rhythm then
-  silence) is the right shape, but with a longer history I'd model each account's
-  own inter-order interval rather than a fixed 3-months-silent rule.
+- **Six months is short for cadence.** The health gates (a rhythm-then-silence
+  cadence gate, plus a recovery guard so a rebounded month isn't called "at risk")
+  are the right shape, but with a longer history I'd model each account's own
+  inter-order interval rather than a fixed 3-months-silent rule.
+- **Reengage can't yet tell "customer disengaged" from "AM eased off".** For a
+  broker-reliant account a spend drop may be the AM placing fewer orders, not the
+  buyer churning. The call note flags this to check, but the tool doesn't
+  distinguish the two actors — separating AM-driven from customer-driven decline
+  is the next signal I'd add.
 - **No product-category data in this dataset.** Drafts deliberately never claim to
   know *what* an account buys (only persona, size, region) — if category were
   ingested, [draft.py](retention_agent/draft.py) is the one place the copy would
@@ -253,5 +269,7 @@ depends on the model being up. Full commit history shows the build order.
 Not committed. Fleek's portfolio workbook is real, anonymised customer data, so
 it stays out of git even though this repo is public. Put it at
 `data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx` before running. Two
-tabs (`Accounts`, `new_accounts`) plus a `Readme` column dictionary. The tool
-reads GBP figures and treats blanks as genuinely missing.
+tabs (`Accounts`, `new_accounts`) plus a `Readme` column dictionary. Per that
+Readme tab, all figures are already in **GBP** (converted, not raw local
+currency), so the tool sums them directly across regions without any FX handling;
+blanks are treated as genuinely missing.
