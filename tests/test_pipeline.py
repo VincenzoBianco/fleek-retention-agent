@@ -261,8 +261,8 @@ def test_learning_loop_shrinks_prior_toward_observed(tmp_path):
     for i in range(3):
         store.record_outcome(f"ACC-{i}", r, "reengage", None, responded=True, converted=True, gmv_delta=1000)
     learned = learning.learned_priors(store, k=20)
-    old, new, n = learned["SAVE_RATE"]
-    assert old == base and n == 3
+    old, new, n, causal = learned["SAVE_RATE"]
+    assert old == base and n == 3 and causal is False    # no holdout arm yet
     assert base < new < 1.0                    # moved toward observed 1.0, but shrunk by k
     assert abs(new - (base * 20 + 1.0 * 3) / 23) < 1e-3   # 4-dp rounded in _shrink
     # apply writes it onto config; restore after so we don't leak into other tests
@@ -271,6 +271,25 @@ def test_learning_loop_shrinks_prior_toward_observed(tmp_path):
         assert config.SAVE_RATE == new
     finally:
         config.SAVE_RATE = base
+
+
+def test_learning_uses_causal_lift_when_holdout_present(tmp_path):
+    from retention_agent import config, learning
+    store = Store(tmp_path / "s.db")
+    r = store.start_run("run")
+    base = config.SAVE_RATE
+    # treated: 4/4 converted (rate 1.0); holdout control: 1/4 recovered on their
+    # own (rate 0.25). Causal lift = 0.75, NOT the raw treated 1.0.
+    for i in range(4):
+        store.record_outcome(f"T-{i}", r, "reengage", None, treated=True, converted=True)
+    for i in range(4):
+        store.record_outcome(f"H-{i}", r, "reengage", None, treated=False, converted=(i == 0))
+    rates = store.realized_rates()["reengage"]
+    assert rates["causal"] is True and rates["causal_rate"] == 0.75 and rates["conversion_rate"] == 1.0
+    _, new, n, causal = learning.learned_priors(store, k=20)["SAVE_RATE"]
+    assert causal is True
+    # prior blends toward the causal 0.75, not the confounded 1.0
+    assert abs(new - (base * 20 + 0.75 * 4) / 24) < 1e-3
 
 
 # --- idempotency contract -------------------------------------------------

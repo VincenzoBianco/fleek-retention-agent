@@ -59,7 +59,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS outcomes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 account_id TEXT, run_id INTEGER, play TEXT, feature TEXT,
-                sent INTEGER DEFAULT 0, responded INTEGER DEFAULT 0,
+                treated INTEGER DEFAULT 1, sent INTEGER DEFAULT 0, responded INTEGER DEFAULT 0,
                 converted INTEGER DEFAULT 0, gmv_delta REAL, ts TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_priority ON accounts(expected_value DESC);
@@ -154,33 +154,48 @@ class Store:
         return self.db.execute("SELECT COUNT(*) c FROM accounts WHERE holdout=1").fetchone()["c"]
 
     def record_outcome(self, account_id: str, run_id: int, play: str, feature: str | None,
-                       sent=True, responded=False, converted=False, gmv_delta=0.0, ts="") -> None:
-        """Log what happened to an action. This is the feedback loop's write path:
-        aggregate these over time and the config priors (save/convert/uplift)
-        become measured accept rates instead of assumptions."""
+                       treated=True, sent=True, responded=False, converted=False,
+                       gmv_delta=0.0, ts="") -> None:
+        """Log what happened to an action. `treated` distinguishes accounts we
+        actually contacted from holdout controls — the difference between their
+        conversion rates is the *causal* lift the priors should learn (not the raw
+        treated rate, which is confounded)."""
         self.db.execute(
-            """INSERT INTO outcomes (account_id, run_id, play, feature, sent, responded,
-                   converted, gmv_delta, ts) VALUES (?,?,?,?,?,?,?,?,?)""",
-            (account_id, run_id, play, feature, int(sent), int(responded),
+            """INSERT INTO outcomes (account_id, run_id, play, feature, treated, sent,
+                   responded, converted, gmv_delta, ts) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (account_id, run_id, play, feature, int(treated), int(sent), int(responded),
              int(converted), gmv_delta, ts),
         )
         self.db.commit()
 
     def realized_rates(self) -> dict[str, dict]:
-        """Measured accept/convert rates per play from logged outcomes — what the
-        priors would be replaced with once outcomes accumulate."""
+        """Per-play rates from outcomes, split treated vs holdout. `causal_rate` is
+        treated − holdout conversion (the incremental effect) when both arms have
+        data; else it falls back to the treated rate and flags itself uncertain."""
         rows = self.db.execute(
-            """SELECT play, COUNT(*) n, SUM(responded) resp, SUM(converted) conv,
-                      SUM(gmv_delta) gmv FROM outcomes GROUP BY play""").fetchall()
-        out = {}
+            """SELECT play, treated, COUNT(*) n, SUM(responded) resp, SUM(converted) conv,
+                      SUM(gmv_delta) gmv FROM outcomes GROUP BY play, treated""").fetchall()
+        agg: dict[str, dict] = {}
         for r in rows:
+            p = agg.setdefault(r["play"], {"treated": None, "holdout": None})
+            arm = "treated" if r["treated"] else "holdout"
             n = r["n"] or 0
-            out[r["play"]] = {
-                "n": n,
-                "response_rate": round((r["resp"] or 0) / n, 2) if n else None,
-                "conversion_rate": round((r["conv"] or 0) / n, 2) if n else None,
-                "gmv_delta": r["gmv"] or 0,
-            }
+            p[arm] = {"n": n, "conv": (r["conv"] or 0) / n if n else 0.0,
+                      "resp": (r["resp"] or 0) / n if n else 0.0, "gmv": r["gmv"] or 0}
+        out = {}
+        for play, p in agg.items():
+            t, h = p["treated"], p["holdout"]
+            if not t:
+                continue
+            if h and h["n"]:
+                causal = max(0.0, t["conv"] - h["conv"])   # incremental lift
+                out[play] = {"n": t["n"], "n_holdout": h["n"], "conversion_rate": round(t["conv"], 2),
+                             "holdout_conversion": round(h["conv"], 2), "causal_rate": round(causal, 2),
+                             "causal": True, "response_rate": round(t["resp"], 2), "gmv_delta": t["gmv"]}
+            else:
+                out[play] = {"n": t["n"], "n_holdout": 0, "conversion_rate": round(t["conv"], 2),
+                             "causal_rate": round(t["conv"], 2), "causal": False,
+                             "response_rate": round(t["resp"], 2), "gmv_delta": t["gmv"]}
         return out
 
     def all_accounts(self) -> list[dict]:

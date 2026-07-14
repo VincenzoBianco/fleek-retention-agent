@@ -62,10 +62,14 @@ def _outcome(args):
     row = next((r for r in store.all_accounts() if r["account_id"] == args.account_id), None)
     if not row:
         print(f"unknown account {args.account_id}"); store.close(); return
+    # A holdout account is a control observation (no outreach was sent); its
+    # outcome trains the baseline arm, not the treated arm.
+    treated = not bool(row["holdout"])
     store.record_outcome(args.account_id, row["decided_run"], row["play"], row["feature"],
-                         sent=True, responded=args.responded, converted=args.converted,
-                         gmv_delta=args.gmv_delta, ts=args.ts or "")
-    print(f"logged outcome for {args.account_id}: responded={args.responded} converted={args.converted}")
+                         treated=treated, sent=treated, responded=args.responded,
+                         converted=args.converted, gmv_delta=args.gmv_delta, ts=args.ts or "")
+    arm = "treated" if treated else "holdout (control)"
+    print(f"logged {arm} outcome for {args.account_id}: responded={args.responded} converted={args.converted}")
     print("realized rates so far:", store.realized_rates())
     store.close()
 

@@ -68,7 +68,7 @@ Add `--llm` to have Claude write the drafts (needs `ANTHROPIC_API_KEY`); without
 it, drafts are templated — real and personalised, just not model-written.
 
 ```bash
-pip install -r requirements-dev.txt && python -m pytest -q   # 26 tests
+pip install -r requirements-dev.txt && python -m pytest -q   # 27 tests
 ```
 
 ## How it works
@@ -244,14 +244,17 @@ on a whale between drops or an account that bounced back last month.
 
 Being honest about where this is thin matters more than a confident headline:
 
-- **The EV priors start as assumptions, then learn.** `SAVE_RATE`, conversion
-  rates, migration expansion, and the growth uplift %s begin as documented priors.
-  Each run [`learning.apply`](retention_agent/learning.py) blends them toward the
-  rates observed in the `outcomes` table using shrinkage — `learned =
-  (prior·k + observed·n)/(k+n)`, k=20 — so with no data the prior holds, and with
-  many outcomes it converges to reality. Until outcomes accrue they're still
-  assumptions (which is why the ranking is "expected value", not "£ at stake"),
-  but the mechanism that replaces them is wired and tested, not deferred.
+- **The EV priors start as assumptions, then learn — causally.** `SAVE_RATE`,
+  conversion rates, migration expansion, and the growth uplift %s begin as
+  documented priors. Each run [`learning.apply`](retention_agent/learning.py)
+  blends them toward observed outcomes with shrinkage — `learned =
+  (prior·k + observed·n)/(k+n)`, k=20 — so no data leaves the prior untouched and
+  enough data converges to reality. Crucially it learns the **causal** rate
+  (treated conversion *minus* the holdout arm's), not the raw treated rate — so
+  the number it converges to is the incremental lift the control group exists to
+  measure, not the confounded one. Until outcomes accrue the priors are still
+  assumptions (hence "expected value", not "£ at stake"), but the mechanism that
+  replaces them is wired and tested end-to-end.
 - **Growth uplift is correlational — a holdout makes it causal.** Engaged accounts
   spending 2x doesn't *prove* a nudge causes the lift (selection bias — engaged
   buyers may just be keener). So ~10% of would-be-actioned accounts are held back

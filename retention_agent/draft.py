@@ -74,9 +74,9 @@ def heuristic_draft(a: Account, d: Decision) -> str:
         return {
             "bundles": (f"Hi! You've been buying handpicks — want me to put together a starter bundle at "
                         f"{scale}? Better price per unit and it saves you the picking. Can have one ready today."),
-            "build_a_bundle": (f"Hi! Want to try a build-a-bundle? You set the mix and we curate it to your "
-                               f"spec — a clean way to scale past {scale} without dropping the quality you "
-                               f"pick for your {who}."),
+            "build_a_bundle": (f"Hi! Want to try a build-a-bundle? You set the mix and we curate it to spec — "
+                               f"a clean way to scale past your ~£{a.aov:,.0f} orders without dropping the "
+                               f"quality you pick for your {who}. First one ready whenever you are."),
             "video": (f"Hi! Saw you've put in {a.make_an_offer_6m:.0f} offers recently — fancy a quick 15-min "
                       f"video viewing of this week's fresh stock? Easier to lock in the pieces you want at "
                       f"{scale} and sort pricing live on the call."),

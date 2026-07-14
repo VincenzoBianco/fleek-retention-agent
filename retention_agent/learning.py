@@ -32,19 +32,23 @@ def _shrink(prior: float, observed: float, n: int, k: int) -> float:
 
 
 def learned_priors(store, k: int = 20) -> dict:
-    """Return {config_key: (old, new, n)} for priors we have evidence to update."""
+    """Return {config_key: (old, new, n, causal)} for priors we can update.
+
+    Learns from the *causal* rate (treated − holdout) when both arms have data,
+    so the prior converges to the incremental effect the holdout exists to
+    measure — not the raw treated conversion the README flags as confounded."""
     rates = store.realized_rates()
     out: dict[str, tuple] = {}
     for _, (play, keys) in _PRIOR_SOURCES.items():
         r = rates.get(play)
         if not r or not r.get("n"):
             continue
-        observed = r.get("conversion_rate")
+        observed = r.get("causal_rate")
         if observed is None:
             continue
         for key in keys:
             old = getattr(config, key)
-            out[key] = (old, _shrink(old, observed, r["n"], k), r["n"])
+            out[key] = (old, _shrink(old, observed, r["n"], k), r["n"], r.get("causal", False))
     return out
 
 
@@ -52,6 +56,7 @@ def apply(store, k: int = 20) -> dict:
     """Blend priors toward observed outcomes and write them onto config for this
     run. Returns the change summary (empty if there are no outcomes yet)."""
     changes = learned_priors(store, k=k)
-    for key, (_, new, _) in changes.items():
+    for key, (_, new, _, _) in changes.items():
         setattr(config, key, new)
-    return {key: {"from": old, "to": new, "n": n} for key, (old, new, n) in changes.items()}
+    return {key: {"from": old, "to": new, "n": n, "causal": causal}
+            for key, (old, new, n, causal) in changes.items()}
