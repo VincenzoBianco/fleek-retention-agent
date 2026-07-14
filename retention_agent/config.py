@@ -36,8 +36,13 @@ GROWTH_GMV_CEILING = 5000.0      # below this 6mo GMV there's room to grow
 HANDPICK_ONLY_BUNDLE_SHARE = 25.0  # <= this % bundle spend = basically handpick-only
 
 # --- Health overlays -------------------------------------------------------
+# This book is lumpy: 158/300 accounts placed a single order in 6 months, so a
+# quiet recent month is normal, not a churn signal. We only flag "dormant" when
+# a *material* buyer that spent in the first half has gone silent for a full
+# quarter — that's a retention emergency worth an AM's time.
 DECLINE_MOMENTUM = -40.0         # last-half vs first-half GMV change % that flags a slide
-DORMANT_RECENT_GMV = 1.0         # ~0 GMV in the most recent month = going quiet
+DORMANT_RECENT_GMV = 1.0         # <= this over the last 3 months = silent
+MATERIAL_ACCOUNT_GMV = 2000.0    # a "real" buyer worth flagging on health
 
 # --- Consistency / cleaning -----------------------------------------------
 # The provided broker_reliance_pct disagrees with the raw order counts on a
