@@ -137,8 +137,8 @@ one place, each with a rationale.
 ### Ranking: one honest number across three different prizes
 
 The three plays protect or create **different kinds of money**, so ranking them on
-a single raw "£ at stake" would be misleading — the £341k *riding on a human* isn't
-at risk of loss (that spend continues if you do nothing), whereas the £196k of
+a single raw "£ at stake" would be misleading — the £364k *riding on a human* isn't
+at risk of loss (that spend continues if you do nothing), whereas the £120k of
 `reengage` GMV genuinely is, and growth uplift is speculative. Each play instead
 converts its prize to a **comparable expected £ impact over 6 months** with an
 explicit probability (all in [config.py](retention_agent/config.py), all labelled
@@ -269,7 +269,8 @@ depends on the model being up. Full commit history shows the build order.
 Not committed. Fleek's portfolio workbook is real, anonymised customer data, so
 it stays out of git even though this repo is public. Put it at
 `data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx` before running. Two
-tabs (`Accounts`, `new_accounts`) plus a `Readme` column dictionary. Per that
-Readme tab, all figures are already in **GBP** (converted, not raw local
-currency), so the tool sums them directly across regions without any FX handling;
-blanks are treated as genuinely missing.
+tabs (`Accounts`, `new_accounts`) plus a `Readme` column dictionary. **Fleek's
+brief** (not the workbook's Readme tab, which only defines columns) states all
+figures are in **GBP** and anonymised — so the tool sums them directly across
+regions with no FX handling. If a future export mixed currencies that assumption
+would break; blanks are treated as genuinely missing.
