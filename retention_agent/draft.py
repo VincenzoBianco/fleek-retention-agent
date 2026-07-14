@@ -1,0 +1,92 @@
+"""Draft the next best action so whoever runs it (an AM or an agent) can just act.
+
+Two paths, same interface:
+- heuristic_draft() — templated, instant, no API key. This is the default and
+  what runs in tests, offline, and at 30k-account scale. The drafts are real
+  and personalised on the account's numbers, not placeholders.
+- llm_draft() — when --llm is on and a key is present, Claude rewrites the draft
+  using the play's markdown guidance as its brief. Cached by fingerprint so a
+  re-run never redrafts an unchanged account.
+
+Channel decides the form: whatsapp/in_app -> a short message to send; call -> a
+call-prep note for the human.
+"""
+from __future__ import annotations
+
+from .models import Account, Decision
+from .llm import LLM
+
+
+def _ctx(a: Account) -> str:
+    persona = (a.buyer_persona or "buyer").lower()
+    where = a.country or a.region or "unknown region"
+    return (f"{a.account_id} · {persona} · {where} · £{a.gmv_total_6m:,.0f}/6mo · "
+            f"{a.orders_6m} orders · AOV £{a.aov:,.0f} · reliance {a.broker_reliance:.0f}%")
+
+
+# --------------------------------------------------------------------------
+# Heuristic templates
+# --------------------------------------------------------------------------
+def heuristic_draft(a: Account, d: Decision) -> str:
+    if d.play == "reengage":
+        gap = "silent for a quarter" if d.health == "dormant" else f"spend down {abs(a.momentum_pct or 0):.0f}%"
+        return (f"Call note — {_ctx(a)}. {gap.capitalize()}. "
+                f"Goal: find what changed (supply gap, pricing, a bad last order, or drifted to an "
+                f"offline wholesaler) and bring one concrete hook — fresh stock in their usual lines. "
+                f"Acknowledge the gap, ask an open question, don't sell hard.")
+
+    if d.play == "migrate_to_selfserve":
+        if d.channel == "whatsapp":  # warm
+            return ("Hi! Noticed you've been browsing the app — want me to set up a ready-to-checkout "
+                    "basket of your usual lines so you get first pick the moment new stock lands? "
+                    "One tap to reorder, and I'm still here whenever you need me.")
+        return (f"Call note — {_ctx(a)}. {a.broker_reliance:.0f}% of orders are AM-placed and they "
+                f"barely touch the app. Offer a 10-min walkthrough; pre-load their usual SKUs so "
+                f"self-serve is easier than messaging me. Frame as 'first pick of new stock'; keep me "
+                f"as safety net for the first order or two. Don't imply the AM is going away.")
+
+    if d.play == "grow_selfserve":
+        return {
+            "bundles": ("Hi! You've been buying handpicks — want me to send a starter bundle in your top "
+                        "category? Same quality, better price per unit, and it saves you the picking. "
+                        "Can have one ready today."),
+            "build_a_bundle": ("Hi! Want to try a build-a-bundle tuned to what you've been browsing? You "
+                               "pick the mix, we curate it — an easy way to scale up orders without the "
+                               "manual picking."),
+            "video": ("Hi! Saw you've made a few offers recently — fancy a quick 15-min video viewing of "
+                      "this week's fresh stock? Easier to lock in the pieces you want and sort pricing "
+                      "live on the call."),
+            "chat": ("Hi! You've been looking at a lot of stock lately — want me to drop a shortlist of "
+                     "what's just landed in your lines into a chat, so you don't have to hunt for it?"),
+        }.get(d.feature or "", "Hi! Wanted to share some fresh stock in your lines — worth a look?")
+
+    return ""
+
+
+# --------------------------------------------------------------------------
+# LLM path
+# --------------------------------------------------------------------------
+def _system(guidance: str, channel: str) -> str:
+    form = ("Write a WhatsApp message to send to the buyer (max 55 words, warm, plain, "
+            "no emoji spam, GBP)." if channel in ("whatsapp", "in_app")
+            else "Write a short call-prep note for the account manager (bullet-style, what to say and why).")
+    return ("You are an account manager at Fleek, a B2B marketplace for secondhand fashion. "
+            "You draft outreach that a colleague can send or act on as-is. Never invent specific "
+            "product names, prices, or stock you don't know. " + form
+            + "\n\nPlay brief:\n" + guidance)
+
+
+def llm_draft(a: Account, d: Decision, llm: LLM, guidance: str) -> str | None:
+    facts = (f"Account: {_ctx(a)}\nSegment: {d.segment} ({d.health}). "
+             f"Play: {d.play}. Feature: {d.feature or 'n/a'}.\n"
+             f"Why this account: {d.reason}\nIntended action: {d.action}")
+    return llm.complete(_system(guidance, d.channel or "whatsapp"), facts)
+
+
+def make_draft(a: Account, d: Decision, llm: LLM | None, guidance: str) -> tuple[str, bool]:
+    """Return (draft_text, used_llm). Falls back to the template on any miss."""
+    if llm is not None and llm.enabled:
+        out = llm_draft(a, d, llm, guidance)
+        if out:
+            return out, True
+    return heuristic_draft(a, d), False
