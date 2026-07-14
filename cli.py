@@ -39,10 +39,13 @@ def _calibrate(args):
     """Print the empirical priors derived from the workbook (the anchors behind
     the growth uplift numbers in config)."""
     import json
-    from retention_agent.analysis import calibrate
+    from retention_agent.analysis import calibrate, prior_sensitivity
     from retention_agent.ingest import load_accounts
     accts = load_accounts(args.workbook, args.sheet)
+    print("EMPIRICAL PRIORS (with sample sizes):")
     print(json.dumps(calibrate(accts), indent=2))
+    print("\nPRIOR SENSITIVITY (does the ranking depend on the assumed probabilities?):")
+    print(json.dumps(prior_sensitivity(accts), indent=2))
 
 
 def _outcome(args):

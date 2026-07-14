@@ -108,8 +108,11 @@ def decide(a: Account, seg: SegmentResult) -> Decision:
         else:
             action = "Book a 10-min guided first order; pre-load usual lines so the app beats messaging"
             channel = "call"
+        # Reliance drives this whole play, so if the reported figure disagreed
+        # with the order counts, say so — the decision uses the recomputed one.
+        conf = " · reliance recomputed from counts (reported disagreed)" if a.reliance_discrepancy else ""
         return Decision(**base, play="migrate_to_selfserve", channel=channel, action=action,
-                        reason=f"£{on_a_human:,.0f} of GMV riding on a human ({a.broker_reliance:.0f}% broker-placed); {seg.reasons[-1]}",
+                        reason=f"£{on_a_human:,.0f} of GMV riding on a human ({a.broker_reliance:.0f}% broker-placed); {seg.reasons[-1]}{conf}",
                         prize_type="GMV on a human", prize_gmv=on_a_human, gmv_at_stake=on_a_human,
                         expected_value=ev, priority=ev)
 
