@@ -9,3 +9,7 @@ __pycache__/
 # Fleek's provided case-study data stays local, not in git history
 data/raw/*
 !data/raw/.gitkeep
+
+# generated at runtime
+data/state.db*
+out/
