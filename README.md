@@ -157,9 +157,14 @@ correctly. `reengage`'s at-risk £ is *forward* exposure (the run-rate we're los
 ordering £1.8k/mo doesn't have its whole £18k window at risk.
 
 These probability priors are assumptions, so `python cli.py calibrate` also runs a
-**sensitivity check**: within a play the ranking is prior-invariant (EV = prior ×
-GMV term), and perturbing every prior ±30% barely moves the top-20 play mix — the
-headline ordering isn't balanced on a knife-edge.
+**sensitivity check** — honestly, not to flatter the design. Within a play the
+ranking is prior-free (EV = prior × GMV term, so a scalar can't reorder it).
+Across plays: proportional ±30% barely moves the top-20 mix, but a *differential*
+shift (reengage's save-rate up while migrate's conversion goes down, or vice
+versa) does move the reengage-vs-migrate balance — yet **16 of the top-20 accounts
+still survive even that worst case**. So the *who to call today* list is robust;
+the exact reengage/migrate ratio is the part that depends on the priors, which is
+precisely what the outcomes loop replaces with measured rates.
 
 ### Which feature to nudge — grounded in the book, not assumed
 
@@ -181,12 +186,18 @@ shaped the growth logic:
   was made against. A re-run diffs the incoming batch into new / changed /
   unchanged and only touches the first two. `account_id` is the primary key, so
   writes are upserts — the same account can never duplicate.
-- **Scale.** Cleaning and signal derivation are vectorised pandas; segmentation
-  and decisioning are a single O(n) pass. Two tests exercise 30k rows: the compute
-  path (clean → segment → decide) and the **store path** (diff + upsert of 30,000
-  accounts, then a re-diff), both well inside budget. The only per-account external
-  cost is LLM drafting — off by default, cached by fingerprint when on, and the
-  obvious next step is the Batch API.
+- **Scale (measured, not asserted).** On a 30,000-account synthetic book (same
+  machine, LLM off): **clean → segment → decide 2.6s**, **diff + upsert of all 30k
+  rows 0.4s**, and an **idempotent re-run diff 0.02s** (near-instant because it's a
+  dict lookup per account and nothing gets rewritten). Cleaning/signals are
+  vectorised pandas; decisioning is a single O(n) pass; SQLite handles the rows
+  trivially. Two tests pin these paths. The only per-account external cost is LLM
+  drafting — off by default, cached by fingerprint when on, Batch API next.
+- **Re-run ordering is last-write-wins by design.** A batch updates an account by
+  `account_id`; if you re-ingested the *older* main sheet after `new_accounts` had
+  refreshed the 5 overlaps, it would write the staler figures back. In production
+  you'd feed ingests newest-last (or carry a source timestamp and guard on it);
+  for the demo, run `Accounts` then `new_accounts`, as intended.
 
 ## The debrief
 

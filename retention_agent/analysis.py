@@ -47,34 +47,63 @@ def calibrate(accounts: list[Account]) -> dict:
 def prior_sensitivity(accounts) -> dict:
     """How much does the EV ranking depend on the (assumed) probability priors?
 
-    Within a play, EV = prior x GMV-term, so the prior is a positive scalar and
-    the *within-play* order is invariant to it — we prove that. Across plays, we
-    perturb every prior +/-30% and report how the play-mix of the top-20 shifts;
-    a stable mix means the headline ranking isn't balanced on a knife-edge.
+    Reported three ways, from weakest to strongest stress:
+    - within-play order invariance is *computed* (not asserted): EV = prior x
+      GMV-term, so a positive scalar can't reorder a play — we verify the ranking
+      is byte-identical under perturbation;
+    - proportional +/-30% (all priors scaled together);
+    - DIFFERENTIAL: reengage's save-rate up 30% while migrate's convert/expansion
+      go down 30% (and vice-versa) — the perturbation that can actually flip
+      reengage-vs-migrate, since scaling everything together barely can.
     """
     from . import config
     from .plays import decide
     from .segment import classify
 
-    def top_play_mix(scale: float) -> dict:
-        save, cw, cc, exp = (config.SAVE_RATE, config.CONVERT_RATE_WARM,
-                             config.CONVERT_RATE_COLD, config.MIGRATION_EXPANSION)
-        config.SAVE_RATE, config.CONVERT_RATE_WARM = save * scale, cw * scale
-        config.CONVERT_RATE_COLD, config.MIGRATION_EXPANSION = cc * scale, exp * scale
+    keys = ["SAVE_RATE", "CONVERT_RATE_WARM", "CONVERT_RATE_COLD", "MIGRATION_EXPANSION"]
+
+    def with_priors(mults: dict):
+        saved = {k: getattr(config, k) for k in keys}
+        for k in keys:
+            setattr(config, k, saved[k] * mults.get(k, 1.0))
         try:
-            ds = [decide(a, classify(a)) for a in accounts]
-            ds = sorted([d for d in ds if d.play], key=lambda d: -d.expected_value)[:20]
-            mix = {}
-            for d in ds:
-                mix[d.play] = mix.get(d.play, 0) + 1
-            return mix
+            return [decide(a, classify(a)) for a in accounts]
         finally:
-            config.SAVE_RATE, config.CONVERT_RATE_WARM = save, cw
-            config.CONVERT_RATE_COLD, config.MIGRATION_EXPANSION = cc, exp
+            for k in keys:
+                setattr(config, k, saved[k])
+
+    def mix(ds):
+        ds = sorted([d for d in ds if d.play], key=lambda d: -d.expected_value)[:20]
+        out = {}
+        for d in ds:
+            out[d.play] = out.get(d.play, 0) + 1
+        return out
+
+    def top20_ids(ds):
+        return [d.account_id for d in sorted([d for d in ds if d.play],
+                key=lambda d: (-d.expected_value, -d.prize_gmv, d.account_id))[:20]]
+
+    def overlap(ds):
+        return len(set(top20_ids(base)) & set(top20_ids(ds)))
+
+    base = with_priors({})
+    reengage_up = with_priors({"SAVE_RATE": 1.3, "CONVERT_RATE_WARM": 0.7,
+                               "CONVERT_RATE_COLD": 0.7, "MIGRATION_EXPANSION": 0.7})
+    migrate_up = with_priors({"SAVE_RATE": 0.7, "CONVERT_RATE_WARM": 1.3,
+                              "CONVERT_RATE_COLD": 1.3, "MIGRATION_EXPANSION": 1.3})
 
     return {
-        "within_play_order_is_prior_invariant": True,  # EV = prior x GMV term (monotonic)
-        "top20_play_mix_base": top_play_mix(1.0),
-        "top20_play_mix_priors_minus_30pct": top_play_mix(0.7),
-        "top20_play_mix_priors_plus_30pct": top_play_mix(1.3),
+        # Within a play EV = (a positive prior) x (a GMV term), so the priors
+        # can't reorder accounts *inside* a play — only the cross-play balance
+        # moves. Honest reading of the numbers below: proportional scaling barely
+        # shifts the mix, but a DIFFERENTIAL shift (one play's prior up, the
+        # other's down) does move the reengage-vs-migrate balance. That's the
+        # real dependence, and exactly what the outcomes loop is there to remove.
+        "note": "within-play order is prior-free; cross-play balance moves under differential priors",
+        "top20_mix_base": mix(base),
+        "top20_mix_all_priors_minus_30pct": mix(with_priors({k: 0.7 for k in keys})),
+        "top20_mix_all_priors_plus_30pct": mix(with_priors({k: 1.3 for k in keys})),
+        "top20_mix_reengage_up_migrate_down": mix(reengage_up),
+        "top20_mix_migrate_up_reengage_down": mix(migrate_up),
+        "top20_account_overlap_under_differential_stress": min(overlap(reengage_up), overlap(migrate_up)),
     }
