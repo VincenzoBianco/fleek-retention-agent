@@ -61,6 +61,18 @@ RHYTHM_MIN_ACTIVE_MONTHS = 3     # ...across at least this many distinct months
 # "healthy" — a real miss.)
 HIGH_VALUE_GMV = 10000.0         # >= this: prolonged silence flags churn, rhythm gate waived
 
+# --- Onboarding / early customer success ----------------------------------
+# All 63 accounts under 5 months old have ZERO manual orders and the smallest
+# baskets (median £242, ~1 order). The AM relationship forms late — by 12mo+,
+# reliance is 35% and GMV ~6x higher. That late arrival is an onboarding gap:
+# new accounts are left to sink-or-swim, most stall after one order. We flag
+# them as a proactive early-success cohort and rank them on RAMP POTENTIAL (the
+# value unlocked by activating them), not their tiny current spend — otherwise a
+# £-only queue buries exactly the accounts a human should be nurturing early.
+ONBOARDING_TENURE_MAX = 5.0      # < this many months = new, needs proactive onboarding
+EARLY_SUCCESS_GMV_TARGET = 1000.0  # a healthy activated new account's ~6mo GMV (ramp target)
+ONBOARD_ACTIVATION_RATE = 0.40   # prior: P(a proactive early-CS touch activates the ramp)
+
 # --- Key-account concentration --------------------------------------------
 # One account is 20% of this book. Accounts this concentrated aren't queue items
 # — they're named, human-owned relationships. Surfaced separately so nobody fires

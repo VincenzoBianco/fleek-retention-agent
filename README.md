@@ -11,7 +11,7 @@ It's a **process, not a dashboard**: point it at the same file twice and the
 second run does nothing; drop in `new_accounts` and only the genuinely new or
 changed accounts are touched.
 
-## The two problems (and a guardrail)
+## The two problems (and the lifecycle around them)
 
 1. **Reduce brokering reliance** (account-managed). Some high-spending
    account-managed customers barely touch the product — the AM is placing their
@@ -21,9 +21,19 @@ changed accounts are touched.
    and nudge each toward the one feature most likely to grow it: **video**,
    **chat**, **bundles**, or **build-a-bundle** — matched to the account's
    blocker, not one-size-fits-all (see the feature logic below).
-3. **Retention guardrail** (`reengage`). A material account that's gone quiet or
-   is sliding gets stabilised *first* — there's no point migrating or upselling a
-   churning account. This play takes precedence over the other two.
+
+Two more plays complete the account lifecycle around those:
+
+3. **Onboard** (new). Every account under 5 months has zero AM support and stalls
+   after one order — an onboarding gap. New accounts are flagged for proactive
+   early customer success and ranked on *ramp potential*, not their tiny spend.
+   (High-touch to activate now, wean to self-serve later — the lifecycle, not a
+   contradiction.)
+4. **Reengage** (guardrail). A material account that's gone quiet or is sliding
+   gets stabilised *first* — no point migrating or upselling a churning account.
+
+The full priority order is `reengage → onboard → migrate → grow → leave alone`:
+stabilise the churning, activate the new, wean the reliant, grow the healthy.
 
 ## What it decided on the real 300-account book
 
@@ -32,6 +42,7 @@ changed accounts are touched.
 | **ACC-001 alone is 20% of the book** (top 10 = 51%, top 30 = 72%) | one whale + a short head + a long 270-account tail — the whale is human-owned, not queued |
 | **80.7% of GMV** flows through the **74 broker-reliant** accounts (just 25% of the book) | the book's core scalability risk — migration is where the money is |
 | **128 of 210** account-managed accounts actually **behave self-serve** | label ≠ behaviour, so we never trust the label |
+| **63 new accounts (<5mo) have 0 manual orders** and stall at ~1 order | onboarding gap — the AM relationship forms ~12mo too late; flagged for early CS |
 | **36** material broker-reliant accounts to migrate now | **£364k** of GMV riding on a human (exposure, not at-risk) |
 | **22** material accounts genuinely churning (`reengage`) | **£120k** of *forward* GMV at risk (run-rate lost, not lifetime) |
 | **125** self-serve growth nudges | video 48 · build-a-bundle 42 · chat 18 · bundles 17 |
@@ -270,12 +281,12 @@ shaped the growth logic:
 
 ## The debrief
 
-**First 30 days.** *Week 1:* run it on the inherited book, work the top of the
-action queue by expected value — the 22 genuinely-churning accounts (`reengage`,
-£120k of forward GMV at risk) first, then the 36 migration targets. *Week 4:* it's
-the morning job — I open `out/index.html`, the new/changed accounts are already
-decided and drafted, and I spend my time on the handful of big accounts that
-genuinely need a human, not on re-triaging the whole book.
+**First 30 days.** *Week 1:* take ACC-001 (20% of the book) as a personally-owned
+key account, then work the queue by expected value — the genuinely-churning
+accounts (`reengage`) first, the 63 new accounts into proactive onboarding, then
+the migration targets. *Week 4:* it's the morning job — I open `out/index.html`,
+the new/changed accounts are already decided and drafted, and I spend my time on
+the accounts that genuinely need a human, not on re-triaging the whole book.
 
 **Migration.** The 36 material broker-reliant accounts, ranked by expected value
 (conversion probability × the exposure × modest expansion — *not* the raw £ on a

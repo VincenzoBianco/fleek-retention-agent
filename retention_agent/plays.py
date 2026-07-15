@@ -117,7 +117,21 @@ def _decide(a: Account, seg: SegmentResult) -> Decision:
                         prize_type="GMV at risk (fwd)", prize_gmv=at_risk, gmv_at_stake=at_risk,
                         expected_value=ev, priority=ev)
 
-    # 2. Migrate broker-reliant material accounts. NB the £ on a human is NOT at
+    # 2. Onboard new accounts. Ranked on RAMP POTENTIAL (the value of activating
+    #    them onto the growth trajectory), not their tiny current spend — a new
+    #    account is nurtured, not migrated or upsold. Takes precedence over the
+    #    lifecycle plays below for young accounts.
+    if a.tenure_months < config.ONBOARDING_TENURE_MAX:
+        ramp = round(max(config.EARLY_SUCCESS_GMV_TARGET - a.gmv_total_6m,
+                         config.EARLY_SUCCESS_GMV_TARGET * 0.3), 0)
+        ev = round(config.ONBOARD_ACTIVATION_RATE * ramp, 0)
+        return Decision(**base, play="onboard", channel="call",
+                        action="Proactive early-success call: help land the first orders, set a cadence, make the app easy",
+                        reason=f"{a.tenure_months:.0f}mo old, {a.orders_6m} orders, no AM support yet — onboarding gap",
+                        prize_type="ramp potential", prize_gmv=ramp, gmv_at_stake=ramp,
+                        expected_value=ev, priority=ev)
+
+    # 3. Migrate broker-reliant material accounts. NB the £ on a human is NOT at
     #    risk — that spend continues if we do nothing. The prize of migrating is
     #    modest expansion on the converted spend, discounted by conversion rate.
     if seg.segment == "broker_reliant":

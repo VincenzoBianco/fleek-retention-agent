@@ -35,6 +35,7 @@ def raw_row(**kw):
 
 def acct(**kw) -> Account:
     d = dict(account_id="ACC-X", ownership="Self Serve", gmv_total_6m=1000, orders_6m=4,
+             tenure_months=12,  # established by default; override for onboarding tests
              monthly_gmv=[200, 200, 200, 200, 100, 100], broker_reliance=0,
              app_active_days_6m=10, pdp_views_6m=50, make_an_offer_6m=0, chat_threads=1,
              handpick_orders=1, bundle_orders=1, bundle_gmv_share_pct=60, momentum_pct=0,
@@ -158,6 +159,24 @@ def test_feature_heavy_browser_gets_chat():
     a = acct(bundle_gmv_share_pct=80, handpick_orders=0, make_an_offer_6m=0,
              pdp_views_6m=300, chat_threads=0, orders_6m=8)
     assert choose_feature(a)[0] == "chat"
+
+
+# --- onboarding: new accounts are a proactive priority --------------------
+def test_new_account_gets_onboard_ranked_on_ramp_not_current_spend():
+    # a 2-month-old account with one small order — not "grow" or "leave alone",
+    # it's an onboarding case, and its prize reflects ramp potential not £ today
+    a = acct(account_id="NEW", tenure_months=2, gmv_total_6m=200, orders_6m=1,
+             monthly_gmv=[0, 0, 0, 0, 100, 100], broker_reliance=0, pdp_views_6m=30)
+    d = decide(a, classify(a))
+    assert d.play == "onboard"
+    assert d.prize_type == "ramp potential"
+    assert d.prize_gmv > a.gmv_total_6m          # ranked on upside, not tiny current spend
+
+
+def test_established_account_does_not_trigger_onboard():
+    a = acct(account_id="OLD", tenure_months=18, broker_reliance=0, pdp_views_6m=300,
+             make_an_offer_6m=5, gmv_total_6m=800)
+    assert decide(a, classify(a)).play != "onboard"
 
 
 # --- health: materiality governs the precision/recall trade --------------

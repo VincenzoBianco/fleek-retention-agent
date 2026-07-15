@@ -59,6 +59,12 @@ def heuristic_draft(a: Account, d: Decision) -> str:
                 f"{who} (supply gap, pricing, a bad last order, or drifted to an offline wholesaler) and "
                 f"bring one concrete hook — fresh stock in their lines. Don't sell hard.{broker}")
 
+    if d.play == "onboard":
+        return (f"Onboarding note — {_ctx(a)}. {a.tenure_months:.0f} months in, {a.orders_6m} order(s), "
+                f"no AM contact yet. Goal: activation, not a big basket. Welcome call — offer to help "
+                f"source and place their next 1-2 orders, walk the app, and set an expectation for cadence. "
+                f"Warm and human; this is the first impression. Aim for a confident second order.")
+
     if d.play == "migrate_to_selfserve":
         if d.channel == "whatsapp":  # warm
             return ("Hi! Noticed you've been browsing the app — want me to set up a ready-to-checkout "
