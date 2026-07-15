@@ -29,6 +29,7 @@ changed accounts are touched.
 
 | | |
 |---|---|
+| **ACC-001 alone is 20% of the book** (top 10 = 51%, top 30 = 72%) | one whale + a short head + a long 270-account tail — the whale is human-owned, not queued |
 | **80.7% of GMV** flows through the **74 broker-reliant** accounts (just 25% of the book) | the book's core scalability risk — migration is where the money is |
 | **128 of 210** account-managed accounts actually **behave self-serve** | label ≠ behaviour, so we never trust the label |
 | **36** material broker-reliant accounts to migrate now | **£364k** of GMV riding on a human (exposure, not at-risk) |
@@ -165,6 +166,29 @@ Migration exists even though, on a pure churn horizon, that spend isn't going
 anywhere next month (see the ranking note — the daily queue and the strategic prize
 are deliberately two lenses).
 
+### Key accounts and churn: materiality governs everything
+
+**One account (ACC-001) is 20% of the whole book.** It isn't a queue item — it's a
+named relationship. `store.key_accounts()` flags any account ≥10% of book GMV as
+**human-owned** and surfaces it in its own banner, so nobody fires an automated
+nudge at a fifth of the revenue.
+
+The same materiality logic fixes churn recall. Flagging churn is a
+precision/recall trade: too loose and every lumpy low-frequency buyer trips a
+false alarm (this book has 158 single-order accounts); too tight and you miss the
+expensive ones. The tool scales the bar by £ at stake:
+
+- a **modest** account needs a *broken rhythm* to flag (≥4 orders across ≥3 months,
+  then silence) — so a £3k account that ordered once in October isn't "churning";
+- a **high-value** account (≥£10k) flags on *silence alone* — a £70k account
+  (ACC-002) that's placed nothing since October is a churn emergency regardless of
+  order count, and waiting for a "rhythm" to break would be negligent.
+
+That's a deliberate reversal of an earlier, over-tightened version that read
+ACC-002 as "healthy" and tried to *migrate* it — you can't migrate an account
+that's gone dark. The small, genuinely-lumpy tail (£2–5k, 1–3 orders) stays quiet
+on purpose; the money-at-risk accounts always surface.
+
 ### Ranking: one honest number across three different prizes
 
 The three plays protect or create **different kinds of money**, so ranking them on
@@ -268,11 +292,13 @@ diluting AOV), a price-led handpick buyer → bundles. One nudge per account, no
 menu.
 
 **Health.** Healthiest = self-serving, engaged, spending, stable. We leave 117
-accounts alone *on purpose*. The unhealthy ones are the 22 material accounts with a
-broken ordering rhythm (dormant/declining) — separated from lumpy low-frequency
-buyers by the cadence gate, and from mid-window dips that already rebounded by the
-recovery guard, which is why `reengage` can outrank everything without crying wolf
-on a whale between drops or an account that bounced back last month.
+accounts alone *on purpose*. Churn is flagged with a materiality-scaled bar:
+high-value accounts (≥£10k) flag on silence alone (ACC-002, £70k, dark since
+October → `reengage`), while modest accounts need a broken rhythm so the long
+lumpy tail doesn't cry wolf; a recovery guard drops mid-window dips that already
+bounced back. And ACC-001 (20% of the book) is pulled out entirely as a
+human-owned key account — a single relationship that size is managed personally,
+not by the queue.
 
 ## Limitations (what I'd poke at next)
 

@@ -54,6 +54,18 @@ DORMANT_RECENT_GMV = 1.0         # <= this over the last 3 months = silent
 MATERIAL_ACCOUNT_GMV = 2000.0    # a "real" buyer worth flagging on health
 RHYTHM_MIN_ORDERS = 4            # ...and an established cadence: this many orders
 RHYTHM_MIN_ACTIVE_MONTHS = 3     # ...across at least this many distinct months
+# Materiality governs the precision/recall trade. The rhythm gate above stops us
+# crying wolf on tiny lumpy buyers — but for a HIGH-VALUE account the cost of a
+# missed churn dwarfs a needless check-in, so silence alone flags it regardless
+# of order cadence. (Without this, a £70k account silent since October reads as
+# "healthy" — a real miss.)
+HIGH_VALUE_GMV = 10000.0         # >= this: prolonged silence flags churn, rhythm gate waived
+
+# --- Key-account concentration --------------------------------------------
+# One account is 20% of this book. Accounts this concentrated aren't queue items
+# — they're named, human-owned relationships. Surfaced separately so nobody fires
+# an automated nudge at a fifth of the revenue.
+KEY_ACCOUNT_GMV_SHARE = 0.10     # >= this share of book GMV = key account
 # ...and it must NOT have bounced back: if the latest month already recovered to
 # this fraction of the earlier run-rate, the mid-window dip was noise, not a
 # slide. Without this, an account that dipped then rebounded in Feb still trips

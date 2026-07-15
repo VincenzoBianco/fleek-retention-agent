@@ -52,6 +52,16 @@ def _concentration_banner(report: RunReport) -> str:
             f'book). Migrating them off manual ordering is the book\'s biggest scalability lever.</div>')
 
 
+def _key_accounts_banner(store: Store) -> str:
+    ka = store.key_accounts()
+    if not ka:
+        return ""
+    items = " · ".join(f'<b>{html.escape(k["account_id"])}</b> {k["pct_of_gmv"]:.0f}% (£{k["gmv_total"]:,.0f})'
+                       for k in ka)
+    return (f'<div class="keyacct">★ Key accounts — human-owned, handled personally (not the automated '
+            f'queue): {items}</div>')
+
+
 def write_html(store: Store, report: RunReport, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "index.html"
@@ -108,9 +118,13 @@ def write_html(store: Store, report: RunReport, out_dir: Path) -> Path:
   .concentration {{ background:#fdf1e3; border:1px solid #eccfa6; border-left:4px solid #b45309;
     border-radius:10px; padding:14px 18px; margin:0 0 20px; font-size:14px; color:#7c4a12; }}
   .concentration b {{ font-size:22px; color:#b45309; }}
+  .keyacct {{ background:#f0eefb; border:1px solid #ccc3ef; border-left:4px solid #5b46c9;
+    border-radius:10px; padding:12px 18px; margin:0 0 20px; font-size:13.5px; color:#3f318f; }}
+  .keyacct b {{ color:#2e2373; }}
 </style></head><body><div class="wrap">
   <h1>Fleek Retention — action queue</h1>
   <p class="sub">Run #{report.run_id} · {html.escape(report.source)} · ranked by risk-adjusted expected value</p>
+  {_key_accounts_banner(store)}
   {_concentration_banner(report)}
   <div class="cards">
     <div class="card"><div class="big">{report.n_seen}</div><div class="lbl">accounts seen</div></div>

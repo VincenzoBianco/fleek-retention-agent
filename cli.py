@@ -34,6 +34,9 @@ def _run(args):
     if c:
         print(f"  ⚠ broker-dependency: {c['broker_reliant_accounts']} accounts "
               f"({c['pct_of_accounts']}% of book) hold {c['pct_of_gmv']}% of GMV — the scalability risk")
+    for k in store.key_accounts():
+        print(f"  ★ KEY ACCOUNT {k['account_id']}: {k['pct_of_gmv']}% of book GMV "
+              f"(£{k['gmv_total']:,.0f}) — human-owned, monitor personally")
     print(f"  seen={report.n_seen}  new={report.n_new}  changed={report.n_changed}  "
           f"unchanged/skipped={report.n_unchanged_skipped}  stale/skipped={report.n_stale_skipped}")
     print(f"  actions queued={report.n_actions}  holdout(control)={report.n_holdout}  "

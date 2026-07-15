@@ -37,17 +37,19 @@ def _health(a: Account) -> str:
     latest_month = a.monthly_gmv[-1]
     active_months = sum(1 for m in a.monthly_gmv if m > 0)
     material = a.gmv_total_6m >= config.MATERIAL_ACCOUNT_GMV
-    # A real churn signal needs materiality AND a broken rhythm. A big
-    # intermittent buyer (two large orders, then a gap) clears the GMV gate but
-    # is lumpy, not churning — the cadence gate is what tells them apart.
+    # A real churn signal needs materiality AND either a broken rhythm OR enough
+    # £ that we'd want eyes regardless. The rhythm gate tells a lumpy small buyer
+    # apart from a churner; a high-value account skips it — silence on a £70k
+    # account is an emergency even off two big orders.
     rhythm = (a.orders_6m >= config.RHYTHM_MIN_ORDERS
               and active_months >= config.RHYTHM_MIN_ACTIVE_MONTHS)
-    if material and rhythm and first_half > 0 and last_quarter <= config.DORMANT_RECENT_GMV:
+    flag_ok = rhythm or a.gmv_total_6m >= config.HIGH_VALUE_GMV
+    if material and flag_ok and first_half > 0 and last_quarter <= config.DORMANT_RECENT_GMV:
         return "dormant"
     # Declining only if the slide hasn't already reversed: the latest month must
     # still be below RECOVERY_FRACTION of the earlier run-rate. An account that
     # dipped mid-window but rebounded in the last month is not "at risk".
-    if material and rhythm and a.momentum_pct is not None and a.momentum_pct <= config.DECLINE_MOMENTUM:
+    if material and flag_ok and a.momentum_pct is not None and a.momentum_pct <= config.DECLINE_MOMENTUM:
         rebounded = latest_month >= config.RECOVERY_FRACTION * (first_half / 3)
         if not rebounded:
             return "declining"

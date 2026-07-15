@@ -160,12 +160,21 @@ def test_feature_heavy_browser_gets_chat():
     assert choose_feature(a)[0] == "chat"
 
 
-# --- health: cadence gate separates churn from lumpy buying ---------------
-def test_lumpy_whale_not_flagged_dormant():
-    # two big early orders then silence — clears the GMV gate, but no rhythm
+# --- health: materiality governs the precision/recall trade --------------
+def test_small_lumpy_buyer_not_flagged_dormant():
+    # £3k, two early orders then silence — no rhythm and below the high-value
+    # bar, so it's lumpy low-frequency buying, not churn. Don't cry wolf.
+    a = acct(account_id="SMALL", gmv_total_6m=3000, orders_6m=2,
+             monthly_gmv=[1500, 1500, 0, 0, 0, 0], momentum_pct=-100)
+    assert classify(a).health == "healthy"
+
+
+def test_high_value_silence_is_dormant_even_without_rhythm():
+    # £70k, only two big early orders, silent for a quarter. No order rhythm, but
+    # the £ at stake means silence alone is a churn emergency — must flag.
     a = acct(account_id="WHALE", gmv_total_6m=70000, orders_6m=2,
              monthly_gmv=[36000, 34000, 0, 0, 0, 0], momentum_pct=-100)
-    assert classify(a).health == "healthy"   # not "dormant"
+    assert classify(a).health == "dormant"
 
 
 def test_rhythmic_buyer_gone_silent_is_dormant():
@@ -254,6 +263,10 @@ def test_gmv_concentration_flags_broker_dependency(tmp_path):
     assert c["broker_reliant_accounts"] == 1
     assert c["pct_of_accounts"] == 10.0          # 1 of 10 accounts
     assert c["pct_of_gmv"] > 80.0                # but the large majority of GMV
+    # the whale is a KEY ACCOUNT (>=10% of book) — surfaced separately
+    ka = store.key_accounts()
+    assert [k["account_id"] for k in ka] == ["BIG"]
+    assert ka[0]["pct_of_gmv"] > 80.0
 
 
 # --- newest-source-wins guard --------------------------------------------

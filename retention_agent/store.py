@@ -153,6 +153,21 @@ class Store:
     def holdout_count(self) -> int:
         return self.db.execute("SELECT COUNT(*) c FROM accounts WHERE holdout=1").fetchone()["c"]
 
+    def key_accounts(self, share: float = None) -> list[dict]:
+        """Accounts so concentrated they're named, human-owned relationships — not
+        queue items. Returns them with their share of book GMV, largest first."""
+        share = config.KEY_ACCOUNT_GMV_SHARE if share is None else share
+        tot = self.db.execute("SELECT COALESCE(SUM(gmv_total),0) g FROM accounts").fetchone()["g"] or 1
+        rows = self.db.execute(
+            "SELECT * FROM accounts WHERE gmv_total >= ? ORDER BY gmv_total DESC",
+            (share * tot,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["pct_of_gmv"] = round(d["gmv_total"] / tot * 100, 1)
+            out.append(d)
+        return out
+
     def gmv_concentration(self) -> dict:
         """The strategic headline: how much of the book's GMV depends on an AM
         placing orders. Broker-reliant accounts are a minority by count but hold
