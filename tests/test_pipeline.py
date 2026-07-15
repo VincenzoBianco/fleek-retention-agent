@@ -115,6 +115,22 @@ def test_high_reliance_low_activity_is_broker_reliant():
     assert classify(a).segment == "broker_reliant"
 
 
+def test_transaction_mode_tiers_and_migration_readiness():
+    # tier is cut on manual-order share; hybrid = migration-ready (warm), manual = cold
+    df = clean(pd.DataFrame([
+        raw_row(account_id="SS", orders_6m=10, manual_orders=1, self_serve_orders=9, gmv_total_6m=500, gmv_sep=500),
+        raw_row(account_id="HY", orders_6m=10, manual_orders=6, self_serve_orders=4, gmv_total_6m=9000, gmv_sep=9000),
+        raw_row(account_id="MN", orders_6m=10, manual_orders=9, self_serve_orders=1, gmv_total_6m=9000, gmv_sep=9000),
+    ]))
+    acc = {a.account_id: a for a in to_accounts(df)}
+    assert acc["SS"].transaction_mode == "self_serve"   # 10% manual
+    assert acc["HY"].transaction_mode == "hybrid"        # 60% manual
+    assert acc["MN"].transaction_mode == "manual"        # 90% manual
+    # hybrid broker-reliant account is warm (proven partial self-serve); manual is cold
+    assert classify(acc["HY"]).subtype == "warm"
+    assert classify(acc["MN"]).subtype == "cold"
+
+
 def test_high_intent_low_spend_is_growth():
     a = acct(broker_reliance=0, pdp_views_6m=300, make_an_offer_6m=5, gmv_total_6m=800)
     s = classify(a)

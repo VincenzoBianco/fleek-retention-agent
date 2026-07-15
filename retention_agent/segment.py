@@ -54,25 +54,23 @@ def _health(a: Account) -> str:
     return "healthy"
 
 
-def _self_serving_now(a: Account) -> bool:
-    """Genuine independent product usage — the counter-evidence to reliance."""
-    return (a.app_active_days_6m >= config.SELFSERVE_ACTIVE_DAYS_LOW
-            or a.pdp_views_6m >= config.SELFSERVE_PDP_LOW)
-
-
 def classify(a: Account) -> SegmentResult:
     health = _health(a)
     r = a.broker_reliance
-    active = _self_serving_now(a)
 
     # --- PRIMARY split on reliance (recomputed from order counts) ---
     if r >= config.BROKER_RELIANCE_HIGH:
-        # A person is placing most orders. Warm = they at least browse/offer,
-        # so migration is a nudge; cold = they never touch the app, harder.
-        warm = active or a.make_an_offer_6m > 0
+        # A person is placing most orders. The readiness signal is the transaction
+        # tier: HYBRID accounts already self-serve 25-75% of their orders — they've
+        # proven they can use the product, so migration is a low-friction nudge
+        # (warm). MANUAL accounts (>75%) rarely self-serve — a hands-on handover
+        # (cold). This tier read is more principled than app-activity alone, and
+        # it's where the value is: hybrid is the highest-AOV, highest-GMV tier.
+        warm = a.transaction_mode == "hybrid"
         reasons = [
             f"AM places {r:.0f}% of orders",
-            "browses/offers on their own" if warm else f"only {a.app_active_days_6m:.0f} active app-days, {a.pdp_views_6m:.0f} views",
+            f"already self-serves {100 - r:.0f}% of orders — migration-ready" if warm
+            else f"self-serves only {100 - r:.0f}% — needs a guided handover",
         ]
         return SegmentResult("broker_reliant", "warm" if warm else "cold", health, reasons)
 

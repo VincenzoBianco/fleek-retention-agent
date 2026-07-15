@@ -17,6 +17,24 @@ def _median(xs: list[float], default: float = 0.0) -> float:
     return st.median(xs) if xs else default
 
 
+def tier_summary(accounts: list[Account]) -> dict:
+    """Portfolio split by transaction-mode tier: count, GMV share, and blended AOV.
+    The headline: hybrid is a quarter of the book but the majority of GMV and the
+    highest AOV — the prime migration target."""
+    tot_gmv = sum(a.gmv_total_6m for a in accounts) or 1
+    out = {}
+    for tier in ("self_serve", "hybrid", "manual"):
+        g = [a for a in accounts if a.transaction_mode == tier]
+        gmv = sum(a.gmv_total_6m for a in g)
+        orders = sum(a.orders_6m for a in g) or 1
+        out[tier] = {
+            "accounts": len(g),
+            "pct_of_gmv": round(gmv / tot_gmv * 100, 1),
+            "aov_blended": round(gmv / orders),
+        }
+    return out
+
+
 def calibrate(accounts: list[Account]) -> dict:
     ss = [a for a in accounts if a.broker_reliance <= 20]  # self-serving behaviour
 
@@ -29,6 +47,7 @@ def calibrate(accounts: list[Account]) -> dict:
     b_aov, h_aov = _median(bundle_aov, 1), _median(hand_aov, 1)
     eng, uneng = _median(engaged, 1), _median(unengaged, 1)
     return {
+        "transaction_tiers": tier_summary(accounts),
         "handpick_vs_bundle_aov": {
             "bundle_median_aov": round(b_aov), "n_bundle": len(bundle_aov),
             "handpick_median_aov": round(h_aov), "n_handpick": len(hand_aov),

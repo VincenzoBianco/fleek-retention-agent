@@ -43,6 +43,7 @@ class Account(BaseModel):
 
     # --- recomputed signals (see ingest.py) ---
     broker_reliance: float = 0.0         # manual_orders / orders_6m * 100 (we trust counts)
+    transaction_mode: str = ""           # self_serve | hybrid | manual (tier on manual-order share)
     broker_reliance_reported: Optional[float] = None  # the provided column, kept for reconciliation
     reliance_discrepancy: bool = False   # True when reported vs computed differ materially
     momentum_pct: Optional[float] = None # robust last-half vs first-half GMV change

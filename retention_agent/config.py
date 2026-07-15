@@ -25,8 +25,15 @@ MONTH_COLS = ["gmv_sep", "gmv_oct", "gmv_nov", "gmv_dec", "gmv_jan", "gmv_feb"]
 # behaviour, never from the ownership label.
 BROKER_RELIANCE_HIGH = 50.0      # >= this % of orders placed by an AM = person is the buyer
 BROKER_RELIANCE_LOW = 20.0       # <= this % = effectively self-serving already
-SELFSERVE_ACTIVE_DAYS_LOW = 6.0  # < this many active app-days/6mo = not really using the product
-SELFSERVE_PDP_LOW = 40.0         # < this many product views/6mo = not browsing on their own
+
+# Transaction-mode tiers, cut on the same manual-order share. This is the read
+# that matters commercially: HYBRID accounts (already self-serve 25-75% of their
+# orders) are 25% of the book but ~70% of GMV *and* the highest AOV — they've
+# proven they can use the product, so they're the prime, low-friction migration
+# target. MANUAL (>75%) accounts rarely self-serve, so they need a hands-on
+# handover. SELF_SERVE (<25%) are the growth pool.
+TIER_SELF_SERVE_MAX = 25.0       # < this % manual = self-serve tier
+TIER_MANUAL_MIN = 75.0           # > this % manual = manual tier; between = hybrid
 
 # --- Self-serve growth (headroom) -----------------------------------------
 # High intent, low realised spend = money left on the table.

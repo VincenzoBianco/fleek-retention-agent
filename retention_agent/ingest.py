@@ -91,6 +91,11 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     # --- recompute broker reliance from the counts we trust ---
     orders = df["orders_6m"].replace(0, np.nan)
     df["broker_reliance"] = (df["manual_orders"] / orders * 100).fillna(0).round(1)
+    # transaction-mode tier on the recomputed share
+    df["transaction_mode"] = np.select(
+        [df["broker_reliance"] < config.TIER_SELF_SERVE_MAX,
+         df["broker_reliance"] > config.TIER_MANUAL_MIN],
+        ["self_serve", "manual"], default="hybrid")
     df["broker_reliance_reported"] = df["broker_reliance_pct"]
     df["reliance_discrepancy"] = (
         (df["broker_reliance"] - df["broker_reliance_reported"]).abs()
@@ -181,6 +186,7 @@ def to_accounts(df: pd.DataFrame) -> list[Account]:
             bundle_orders=int(r["bundle_orders"]),
             bundle_gmv_share_pct=float(r["bundle_gmv_share_pct"]),
             broker_reliance=float(r["broker_reliance"]),
+            transaction_mode=str(r["transaction_mode"]),
             broker_reliance_reported=_optf(r["broker_reliance_reported"]),
             reliance_discrepancy=bool(r["reliance_discrepancy"]),
             momentum_pct=_optf(r["momentum_pct"]),

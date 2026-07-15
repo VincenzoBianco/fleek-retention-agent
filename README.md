@@ -142,14 +142,28 @@ one place, each with a rationale.
 
 ### Why migration is the headline, not a side-quest
 
-Segmenting isn't just tidy — it reveals where the money is. The 74 broker-reliant
-accounts are only **25% of the book but 80.7% of its GMV** (`store.gmv_concentration`,
-surfaced as a banner on every run). Four-fifths of revenue depends on a person
-placing the orders — the "we become the bottleneck, it doesn't scale" risk, made
-concrete. That concentration is *why* moving these accounts to self-serve is the
-book's biggest lever, and why the migrate play exists even though, on a pure
-churn horizon, that spend isn't going anywhere next month (see the ranking note
-below — the daily queue and the strategic prize are deliberately two lenses).
+Segmenting isn't just tidy — it reveals where the money is. Cut the book into three
+**transaction-mode tiers** on manual-order share (`analysis.tier_summary`):
+
+| Tier | manual share | accounts | % of GMV | blended AOV |
+|---|---|---|---|---|
+| self-serve | <25% | 218 | 16% | £342 |
+| **hybrid** | 25–75% | 66 | **70%** | **£1,002** |
+| manual | >75% | 16 | 13% | £631 |
+
+Two things fall out. **(1) 80.7% of GMV depends on a person placing orders** — the
+"we become the bottleneck, it doesn't scale" risk, made concrete (surfaced as a
+banner on every run via `store.gmv_concentration`). **(2) Hybrid is the prize:** a
+quarter of the book, the majority of GMV, and the *highest* AOV — higher than the
+fully-manual tier (whose mean is inflated by a couple of whales). These accounts
+already self-serve 25–75% of their orders, so they've *proven they can use the
+product* — the highest-value, lowest-friction migration target. So the tool treats
+**hybrid as "warm"** (a one-tap nudge) and **manual as "cold"** (a guided, AM-shadowed
+handover) — a migration-readiness signal drawn from behaviour, not guesswork.
+
+Migration exists even though, on a pure churn horizon, that spend isn't going
+anywhere next month (see the ranking note — the daily queue and the strategic prize
+are deliberately two lenses).
 
 ### Ranking: one honest number across three different prizes
 
