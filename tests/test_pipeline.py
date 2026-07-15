@@ -203,6 +203,18 @@ def test_rhythmic_buyer_gone_silent_is_dormant():
     assert classify(a).health == "dormant"
 
 
+def test_declining_needs_both_cagr_and_activity_drop():
+    # shrinking GMV (negative CAGR) but activity held up (spread evenly, no
+    # pullback) -> NOT flagged; churn requires both signals to agree.
+    steady = acct(account_id="STEADY", gmv_total_6m=18000, orders_6m=8,
+                  monthly_gmv=[3500, 3500, 3000, 2800, 2700, 2500], momentum_pct=-25)
+    assert classify(steady).health == "healthy"     # gentle decline, activity intact
+    # shrinking AND pulled back in the recent window -> declining
+    both = acct(account_id="BOTH", gmv_total_6m=18000, orders_6m=8,
+                monthly_gmv=[6000, 6000, 5000, 700, 300, 0], momentum_pct=-90)
+    assert classify(both).health == "declining"
+
+
 def test_rebounded_account_not_flagged_declining():
     # dipped mid-window but the latest month recovered -> not "at risk"
     a = acct(account_id="REBOUND", gmv_total_6m=24000, orders_6m=6,

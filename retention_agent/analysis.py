@@ -35,6 +35,28 @@ def tier_summary(accounts: list[Account]) -> dict:
     return out
 
 
+def aov_opportunities(accounts: list[Account]) -> dict:
+    """AOV growth opportunities. NB the data has no monthly order counts, so a
+    true 6-month AOV *trend* per account isn't derivable — only one blended AOV
+    over the window. So this is a cross-sectional read: accounts whose AOV sits
+    well below their own tier's median, with enough order volume that lifting
+    basket size (bundles / build-a-bundle) would actually move GMV. It's the
+    best proxy for 'AOV upside' the file supports; a true trend needs per-order
+    or per-month order data."""
+    tiers = {}
+    for t in ("self_serve", "hybrid", "manual"):
+        aovs = sorted(a.aov for a in accounts if a.transaction_mode == t and a.orders_6m >= 2)
+        tiers[t] = _median(aovs, 0)
+    candidates = [a for a in accounts
+                  if a.orders_6m >= 3 and tiers.get(a.transaction_mode, 0) > 0
+                  and a.aov < 0.6 * tiers[a.transaction_mode]]
+    return {
+        "tier_median_aov": {k: round(v) for k, v in tiers.items()},
+        "below_tier_aov_candidates": len(candidates),
+        "note": "cross-sectional (AOV vs tier median); a true AOV trend needs monthly order data (absent)",
+    }
+
+
 def calibrate(accounts: list[Account]) -> dict:
     ss = [a for a in accounts if a.broker_reliance <= 20]  # self-serving behaviour
 
@@ -48,6 +70,7 @@ def calibrate(accounts: list[Account]) -> dict:
     eng, uneng = _median(engaged, 1), _median(unengaged, 1)
     return {
         "transaction_tiers": tier_summary(accounts),
+        "aov_opportunities": aov_opportunities(accounts),
         "handpick_vs_bundle_aov": {
             "bundle_median_aov": round(b_aov), "n_bundle": len(bundle_aov),
             "handpick_median_aov": round(h_aov), "n_handpick": len(hand_aov),

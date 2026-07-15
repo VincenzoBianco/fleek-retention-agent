@@ -184,21 +184,35 @@ named relationship. `store.key_accounts()` flags any account ≥10% of book GMV 
 **human-owned** and surfaces it in its own banner, so nobody fires an automated
 nudge at a fifth of the revenue.
 
-The same materiality logic fixes churn recall. Flagging churn is a
-precision/recall trade: too loose and every lumpy low-frequency buyer trips a
-false alarm (this book has 158 single-order accounts); too tight and you miss the
-expensive ones. The tool scales the bar by £ at stake:
+**Churn is read from two signals that must agree** (`segment._trend_signals`),
+which anecdotally captures "the account went quiet" without over-firing on noise:
 
-- a **modest** account needs a *broken rhythm* to flag (≥4 orders across ≥3 months,
-  then silence) — so a £3k account that ordered once in October isn't "churning";
-- a **high-value** account (≥£10k) flags on *silence alone* — a £70k account
-  (ACC-002) that's placed nothing since October is a churn emergency regardless of
-  order count, and waiting for a "rhythm" to break would be negligent.
+1. **CAGR** — the monthly compound growth of GMV across the window is negative
+   (shrinking), and
+2. **activity shift** — the last 4 months are pulled back vs the first 3.
 
-That's a deliberate reversal of an earlier, over-tightened version that read
-ACC-002 as "healthy" and tried to *migrate* it — you can't migrate an account
-that's gone dark. The small, genuinely-lumpy tail (£2–5k, 1–3 orders) stays quiet
-on purpose; the money-at-risk accounts always surface.
+A gentle decline with intact activity doesn't flag; a shrink *with* a recent
+pullback does. A recovery guard drops slides that already rebounded in the latest
+month. *(Data note: the file has no monthly order counts — only 6-month totals —
+so the activity signal is proxied by monthly GMV; a month with spend stands in for
+"transacted".)*
+
+Materiality then scales the precision/recall trade — this book has 158
+single-order accounts, so a blanket rule floods the queue:
+
+- a **modest** account also needs a *broken rhythm* (≥4 orders across ≥3 months)
+  before the CAGR/activity signal counts — so a £3k account that ordered once in
+  October isn't "churning";
+- a **high-value** account (≥£10k) flags on *silence alone* — ACC-002 (£70k,
+  nothing since October) is an emergency regardless of order count. (An earlier
+  over-tightened version read it as "healthy" and tried to *migrate* it — you
+  can't migrate an account that's gone dark.)
+
+**AOV growth, tracked separately** (`analysis.aov_opportunities`). A true 6-month
+AOV *trend* per account isn't derivable here (no monthly orders → no monthly AOV),
+so this is a cross-sectional read: accounts whose blended AOV sits well below their
+own tier's median with enough volume to matter — 19 such candidates — the accounts
+where pushing bundles / build-a-bundle would actually lift the basket.
 
 ### Ranking: one honest number across three different prizes
 
@@ -333,10 +347,14 @@ Being honest about where this is thin matters more than a confident headline:
   `account_id` so it's stable across runs): their intended play is recorded but no
   outreach fires. Comparing treated-vs-holdout GMV in the `outcomes` table is what
   turns the correlational prior into a measured, causal lift as data accrues.
-- **Six months is short for cadence.** The health gates (a rhythm-then-silence
-  cadence gate, plus a recovery guard so a rebounded month isn't called "at risk")
-  are the right shape, but with a longer history I'd model each account's own
-  inter-order interval rather than a fixed 3-months-silent rule.
+- **Six months is short for cadence.** The health gates (CAGR + activity-shift,
+  plus a recovery guard) are the right shape, but with a longer history I'd model
+  each account's own inter-order interval rather than fixed windows.
+- **No monthly order counts — only 6-month totals.** So the churn "activity"
+  signal is proxied by monthly GMV (a month with spend ⇒ it transacted), and a
+  true per-account **AOV trend** can't be computed at all — `aov_opportunities`
+  is therefore a cross-sectional AOV-vs-tier read, not a time series. Per-order or
+  per-month data would upgrade both to the real thing.
 - **Reengage can't yet tell "customer disengaged" from "AM eased off".** For a
   broker-reliant account a spend drop may be the AM placing fewer orders, not the
   buyer churning. The call note flags this to check, but the tool doesn't

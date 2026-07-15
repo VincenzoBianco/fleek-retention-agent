@@ -31,11 +31,30 @@ class SegmentResult:
     reasons: list[str] = field(default_factory=list)
 
 
+def _trend_signals(monthly: list[float]) -> tuple[float, float]:
+    """Two churn signals from the monthly GMV series (the only monthly data we
+    have — no monthly order counts, so GMV proxies activity):
+      cagr    monthly compound GMV growth across the window, % (robust to zeros)
+      activity  last-4-months vs first-3-months activity ratio
+    """
+    first3 = sum(monthly[:3]) / 3
+    last3 = sum(monthly[3:]) / 3
+    last4 = sum(monthly[2:]) / 4
+    if first3 > 0:
+        cagr = ((max(last3, 0.0) / first3) ** (1 / 3) - 1) * 100  # 3-mo gap between midpoints
+        activity = last4 / first3
+    else:
+        cagr = 100.0 if last3 > 0 else 0.0      # 0 -> spend = ramping; 0 -> 0 = flat
+        activity = 2.0 if last4 > 0 else 1.0
+    return round(cagr, 1), round(activity, 2)
+
+
 def _health(a: Account) -> str:
     first_half = sum(a.monthly_gmv[:3])
     last_quarter = sum(a.monthly_gmv[-3:])
     latest_month = a.monthly_gmv[-1]
     active_months = sum(1 for m in a.monthly_gmv if m > 0)
+    cagr, activity = _trend_signals(a.monthly_gmv)
     material = a.gmv_total_6m >= config.MATERIAL_ACCOUNT_GMV
     # A real churn signal needs materiality AND either a broken rhythm OR enough
     # £ that we'd want eyes regardless. The rhythm gate tells a lumpy small buyer
@@ -46,13 +65,13 @@ def _health(a: Account) -> str:
     flag_ok = rhythm or a.gmv_total_6m >= config.HIGH_VALUE_GMV
     if material and flag_ok and first_half > 0 and last_quarter <= config.DORMANT_RECENT_GMV:
         return "dormant"
-    # Declining only if the slide hasn't already reversed: the latest month must
-    # still be below RECOVERY_FRACTION of the earlier run-rate. An account that
-    # dipped mid-window but rebounded in the last month is not "at risk".
-    if material and flag_ok and a.momentum_pct is not None and a.momentum_pct <= config.DECLINE_MOMENTUM:
-        rebounded = latest_month >= config.RECOVERY_FRACTION * (first_half / 3)
-        if not rebounded:
-            return "declining"
+    # Declining needs BOTH signals to agree — shrinking (negative CAGR) AND
+    # activity pulled back (last-4 vs first-3) — and the slide mustn't have
+    # already reversed (latest month below RECOVERY_FRACTION of the earlier rate).
+    deteriorating = cagr <= config.DECLINE_CAGR_MONTHLY and activity <= config.ACTIVITY_DROP_RATIO
+    rebounded = latest_month >= config.RECOVERY_FRACTION * (first_half / 3)
+    if material and flag_ok and deteriorating and not rebounded:
+        return "declining"
     return "healthy"
 
 

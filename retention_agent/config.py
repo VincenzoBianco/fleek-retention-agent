@@ -49,7 +49,14 @@ HANDPICK_ONLY_BUNDLE_SHARE = 25.0  # <= this % bundle spend = basically handpick
 # ordering *rhythm* that then stopped. Materiality alone is not enough — a big
 # intermittent buyer (e.g. two large orders then a gap) clears a GMV gate but
 # isn't churning, it's just lumpy. Requiring a cadence separates the two.
-DECLINE_MOMENTUM = -40.0         # last-half vs first-half GMV change % that flags a slide
+# A slide is flagged only when TWO signals agree, which anecdotally captures
+# "the account went quiet" without over-firing on lumpy noise:
+#   (1) GMV compound growth over the window (CAGR, monthly) is negative, AND
+#   (2) recent activity (last 4 months) has dropped vs early (first 3 months).
+# NB activity here is proxied by monthly GMV — the data has no monthly order
+# counts (only 6-month totals), so a month with spend stands in for "transacted".
+DECLINE_CAGR_MONTHLY = -15.0     # <= this monthly compound GMV growth = shrinking
+ACTIVITY_DROP_RATIO = 0.60       # last-4-mo activity <= this x first-3-mo = pulled back
 DORMANT_RECENT_GMV = 1.0         # <= this over the last 3 months = silent
 MATERIAL_ACCOUNT_GMV = 2000.0    # a "real" buyer worth flagging on health
 RHYTHM_MIN_ORDERS = 4            # ...and an established cadence: this many orders
