@@ -30,6 +30,10 @@ def _run(args):
     report = run_loop(args.workbook, args.sheet, store, use_llm=args.llm, source_ts=ts)
     out = write_all(store, report, Path(args.out))
     print(f"Run #{report.run_id}  ({report.source})")
+    c = report.gmv_concentration
+    if c:
+        print(f"  ⚠ broker-dependency: {c['broker_reliant_accounts']} accounts "
+              f"({c['pct_of_accounts']}% of book) hold {c['pct_of_gmv']}% of GMV — the scalability risk")
     print(f"  seen={report.n_seen}  new={report.n_new}  changed={report.n_changed}  "
           f"unchanged/skipped={report.n_unchanged_skipped}  stale/skipped={report.n_stale_skipped}")
     print(f"  actions queued={report.n_actions}  holdout(control)={report.n_holdout}  "

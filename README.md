@@ -29,6 +29,7 @@ changed accounts are touched.
 
 | | |
 |---|---|
+| **80.7% of GMV** flows through the **74 broker-reliant** accounts (just 25% of the book) | the book's core scalability risk — migration is where the money is |
 | **128 of 210** account-managed accounts actually **behave self-serve** | label ≠ behaviour, so we never trust the label |
 | **36** material broker-reliant accounts to migrate now | **£364k** of GMV riding on a human (exposure, not at-risk) |
 | **22** material accounts genuinely churning (`reengage`) | **£120k** of *forward* GMV at risk (run-rate lost, not lifetime) |
@@ -139,6 +140,17 @@ That's why 128 account-managed accounts land in a self-serve segment — they ha
 an AM, but they buy for themselves. Thresholds live in [config.py](retention_agent/config.py),
 one place, each with a rationale.
 
+### Why migration is the headline, not a side-quest
+
+Segmenting isn't just tidy — it reveals where the money is. The 74 broker-reliant
+accounts are only **25% of the book but 80.7% of its GMV** (`store.gmv_concentration`,
+surfaced as a banner on every run). Four-fifths of revenue depends on a person
+placing the orders — the "we become the bottleneck, it doesn't scale" risk, made
+concrete. That concentration is *why* moving these accounts to self-serve is the
+book's biggest lever, and why the migrate play exists even though, on a pure
+churn horizon, that spend isn't going anywhere next month (see the ranking note
+below — the daily queue and the strategic prize are deliberately two lenses).
+
 ### Ranking: one honest number across three different prizes
 
 The three plays protect or create **different kinds of money**, so ranking them on
@@ -160,6 +172,14 @@ The report shows both, so the queue never hides which is which. That's why ACC-0
 correctly. `reengage`'s at-risk £ is *forward* exposure (the run-rate we're losing
 × 6 months, capped at window GMV), not full lifetime GMV — an account still
 ordering £1.8k/mo doesn't have its whole £18k window at risk.
+
+**Two lenses, on purpose.** This EV ranking is the *operational* one — who to touch
+today for the most protected/created GMV over the next quarter, on a churn horizon.
+It deliberately down-weights migration, because that spend isn't leaving next month.
+But the *strategic* lens is the concentration banner above: 80.7% of GMV is
+broker-bottlenecked, so migration is the biggest long-run lever even though its
+short-horizon EV is modest. The tool surfaces both rather than collapsing a
+quarter's-churn number and a year's-scalability bet into one misleading total.
 
 These probability priors are assumptions, so `python cli.py calibrate` also runs a
 **sensitivity check** — honestly, not to flatter the design. Within a play the

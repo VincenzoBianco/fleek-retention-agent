@@ -220,6 +220,26 @@ def test_holdout_is_deterministic_and_excluded_from_queue(tmp_path):
     assert store.holdout_count() == len(held)
 
 
+# --- GMV concentration (the broker-dependency headline) -------------------
+def test_gmv_concentration_flags_broker_dependency(tmp_path):
+    store = Store(tmp_path / "s.db")
+    r = store.start_run("run")
+    # one big broker-reliant account + several small self-serving ones
+    big = acct(account_id="BIG", ownership="Account Managed", broker_reliance=70,
+               app_active_days_6m=1, pdp_views_6m=2, gmv_total_6m=80000, orders_6m=10,
+               monthly_gmv=[16000, 16000, 16000, 16000, 16000, 0])
+    store.upsert(big, decide(big, classify(big)), "", False, r)
+    for i in range(9):
+        s = acct(account_id=f"S-{i}", fingerprint=f"s{i}", broker_reliance=0,
+                 gmv_total_6m=1000, pdp_views_6m=200)
+        store.upsert(s, decide(s, classify(s)), "", False, r)
+    store.commit()
+    c = store.gmv_concentration()
+    assert c["broker_reliant_accounts"] == 1
+    assert c["pct_of_accounts"] == 10.0          # 1 of 10 accounts
+    assert c["pct_of_gmv"] > 80.0                # but the large majority of GMV
+
+
 # --- newest-source-wins guard --------------------------------------------
 def test_stale_source_does_not_overwrite_fresher_data(tmp_path):
     store = Store(tmp_path / "s.db")

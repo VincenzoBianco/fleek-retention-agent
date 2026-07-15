@@ -42,6 +42,16 @@ def write_csv(store: Store, out_dir: Path) -> Path:
     return path
 
 
+def _concentration_banner(report: RunReport) -> str:
+    c = report.gmv_concentration
+    if not c:
+        return ""
+    return (f'<div class="concentration">Broker-dependency risk — '
+            f'<b>{c["pct_of_gmv"]:.0f}% of GMV</b> flows through the '
+            f'{c["broker_reliant_accounts"]} broker-reliant accounts ({c["pct_of_accounts"]:.0f}% of the '
+            f'book). Migrating them off manual ordering is the book\'s biggest scalability lever.</div>')
+
+
 def write_html(store: Store, report: RunReport, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "index.html"
@@ -95,9 +105,13 @@ def write_html(store: Store, report: RunReport, out_dir: Path) -> Path:
   .play-grow_selfserve {{ color:#047857; }}
   .play-reengage {{ color:#b91c1c; }}
   .foot {{ color:var(--muted); font-size:12px; margin-top:16px; }}
+  .concentration {{ background:#fdf1e3; border:1px solid #eccfa6; border-left:4px solid #b45309;
+    border-radius:10px; padding:14px 18px; margin:0 0 20px; font-size:14px; color:#7c4a12; }}
+  .concentration b {{ font-size:22px; color:#b45309; }}
 </style></head><body><div class="wrap">
   <h1>Fleek Retention — action queue</h1>
   <p class="sub">Run #{report.run_id} · {html.escape(report.source)} · ranked by risk-adjusted expected value</p>
+  {_concentration_banner(report)}
   <div class="cards">
     <div class="card"><div class="big">{report.n_seen}</div><div class="lbl">accounts seen</div></div>
     <div class="card"><div class="big">{report.n_new}</div><div class="lbl">new</div></div>

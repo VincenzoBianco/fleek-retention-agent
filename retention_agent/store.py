@@ -153,6 +153,23 @@ class Store:
     def holdout_count(self) -> int:
         return self.db.execute("SELECT COUNT(*) c FROM accounts WHERE holdout=1").fetchone()["c"]
 
+    def gmv_concentration(self) -> dict:
+        """The strategic headline: how much of the book's GMV depends on an AM
+        placing orders. Broker-reliant accounts are a minority by count but hold
+        the majority of revenue — that concentration is the reason migration is a
+        scalability play, not a nice-to-have."""
+        tot = self.db.execute("SELECT COALESCE(SUM(gmv_total),0) g FROM accounts").fetchone()["g"] or 1
+        br = self.db.execute(
+            "SELECT COUNT(*) n, COALESCE(SUM(gmv_total),0) g FROM accounts WHERE segment='broker_reliant'"
+        ).fetchone()
+        n_tot = self.db.execute("SELECT COUNT(*) c FROM accounts").fetchone()["c"] or 1
+        return {
+            "broker_reliant_accounts": br["n"],
+            "pct_of_accounts": round(br["n"] / n_tot * 100, 1),
+            "broker_reliant_gmv": br["g"],
+            "pct_of_gmv": round(br["g"] / tot * 100, 1),
+        }
+
     def record_outcome(self, account_id: str, run_id: int, play: str, feature: str | None,
                        treated=True, sent=True, responded=False, converted=False,
                        gmv_delta=0.0, ts="") -> None:

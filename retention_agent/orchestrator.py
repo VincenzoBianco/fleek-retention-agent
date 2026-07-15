@@ -82,6 +82,7 @@ def run(source_path: str | Path, sheet: str, store: Store,
         gmv_at_stake_total=sum(r["gmv_at_stake"] or 0 for r in queue),
         expected_value_total=sum(r["expected_value"] or 0 for r in queue),
         learned_priors=learned,
+        gmv_concentration=store.gmv_concentration(),
     )
     store.finish_run(report)
     return report
