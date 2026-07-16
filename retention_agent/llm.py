@@ -22,6 +22,15 @@ class LLM:
         self.model = model or os.getenv("RETENTION_MODEL", DEFAULT_MODEL)
         self._client = None
         self.enabled = False
+        # Reasoning effort. Bounded triage doesn't need the default `high`, so we
+        # ask for `low` to cut token spend/verbosity. Effort is REJECTED on Haiku
+        # 4.5 / Sonnet 4.5 — since every call degrades to None (→ deterministic
+        # fallback), an unguarded effort param on those models would silently make
+        # *every* account fall back. So gate it, and let RETENTION_EFFORT override
+        # (set it to "" / "default" to omit the param entirely).
+        self.effort = os.getenv("RETENTION_EFFORT", "low").strip().lower()
+        m = self.model.lower()
+        self._supports_effort = ("haiku" not in m and m != "claude-sonnet-4-5")
         if os.getenv("ANTHROPIC_API_KEY"):
             try:
                 from anthropic import Anthropic
@@ -29,6 +38,22 @@ class LLM:
                 self.enabled = True
             except Exception:
                 self.enabled = False
+
+    def _tuning(self) -> dict:
+        """Extra messages.create kwargs shared by both call paths: the effort knob,
+        guarded so it's only sent to models that accept it."""
+        if self.effort and self.effort not in ("default", "none") and self._supports_effort:
+            return {"output_config": {"effort": self.effort}}
+        return {}
+
+    def _cached_system(self, system: str) -> list[dict]:
+        """System prompt as a cacheable content block. The analyst brief + strategy
+        + playbooks are byte-identical across all accounts and re-sent every turn,
+        so a cache breakpoint here turns ~5k repeated input tokens into 10%-priced
+        cache reads. Render order is tools → system → messages, so this one
+        breakpoint also covers the (static) tool schemas sent before it."""
+        return [{"type": "text", "text": system,
+                 "cache_control": {"type": "ephemeral"}}]
 
     def complete(self, system: str, prompt: str, max_tokens: int = 320) -> str | None:
         """Return the model's text, or None to signal 'use the fallback'.
@@ -41,8 +66,9 @@ class LLM:
             resp = self._client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,
-                system=system,
+                system=self._cached_system(system),
                 messages=[{"role": "user", "content": prompt}],
+                **self._tuning(),
             )
             if getattr(resp, "stop_reason", None) == "refusal":
                 return None
@@ -75,8 +101,10 @@ class LLM:
                 tool_choice = ({"type": "tool", "name": final_tool}
                                if turn == max_turns - 1 else {"type": "auto"})
                 resp = self._client.messages.create(
-                    model=self.model, max_tokens=max_tokens, system=system,
+                    model=self.model, max_tokens=max_tokens,
+                    system=self._cached_system(system),
                     messages=messages, tools=all_tools, tool_choice=tool_choice,
+                    **self._tuning(),
                 )
                 if getattr(resp, "stop_reason", None) == "refusal":
                     return None

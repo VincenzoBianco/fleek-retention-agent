@@ -13,4 +13,5 @@ data/raw/*
 # generated at runtime
 data/state.db*
 *.csv
+*.log
 .gstack/
