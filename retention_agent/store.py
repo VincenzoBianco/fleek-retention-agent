@@ -38,7 +38,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS accounts (
                 account_id   TEXT PRIMARY KEY,
                 fingerprint  TEXT NOT NULL,
-                ownership    TEXT, region TEXT, persona TEXT,
+                ownership    TEXT, region TEXT, persona TEXT, transaction_mode TEXT,
                 gmv_total    REAL,
                 segment      TEXT, health TEXT,
                 play         TEXT, feature TEXT, channel TEXT,
@@ -65,6 +65,12 @@ class Store:
             CREATE INDEX IF NOT EXISTS idx_priority ON accounts(expected_value DESC);
             """
         )
+        # Defensive migration: add columns introduced after a DB was first created,
+        # so an existing state.db doesn't break on upsert (CREATE IF NOT EXISTS
+        # won't add a column to an existing table).
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(accounts)")}
+        if "transaction_mode" not in cols:
+            self.db.execute("ALTER TABLE accounts ADD COLUMN transaction_mode TEXT")
         self.db.commit()
 
     # --- run lifecycle ---
@@ -112,20 +118,20 @@ class Store:
         self.db.execute(
             """
             INSERT INTO accounts (account_id, fingerprint, ownership, region, persona,
-                gmv_total, segment, health, play, feature, channel, action, reason,
+                transaction_mode, gmv_total, segment, health, play, feature, channel, action, reason,
                 priority, gmv_at_stake, expected_value, prize_type, draft, used_llm,
                 holdout, source_ts, first_seen_run, last_seen_run, decided_run)
-            VALUES (:aid, :fp, :own, :reg, :per, :gmv, :seg, :hea, :play, :feat, :chan,
+            VALUES (:aid, :fp, :own, :reg, :per, :tmode, :gmv, :seg, :hea, :play, :feat, :chan,
                 :act, :rea, :pri, :stake, :ev, :ptype, :draft, :llm, :hold, :ts, :run, :run, :run)
             ON CONFLICT(account_id) DO UPDATE SET
-                fingerprint=:fp, ownership=:own, region=:reg, persona=:per, gmv_total=:gmv,
-                segment=:seg, health=:hea, play=:play, feature=:feat, channel=:chan,
+                fingerprint=:fp, ownership=:own, region=:reg, persona=:per, transaction_mode=:tmode,
+                gmv_total=:gmv, segment=:seg, health=:hea, play=:play, feature=:feat, channel=:chan,
                 action=:act, reason=:rea, priority=:pri, gmv_at_stake=:stake,
                 expected_value=:ev, prize_type=:ptype, draft=:draft, used_llm=:llm,
                 holdout=:hold, source_ts=:ts, last_seen_run=:run, decided_run=:run
             """,
             dict(aid=a.account_id, fp=a.fingerprint, own=a.ownership, reg=a.region,
-                 per=a.buyer_persona, gmv=a.gmv_total_6m, seg=d.segment, hea=d.health,
+                 per=a.buyer_persona, tmode=a.transaction_mode, gmv=a.gmv_total_6m, seg=d.segment, hea=d.health,
                  play=d.play, feat=d.feature, chan=d.channel, act=d.action, rea=d.reason,
                  pri=d.priority, stake=d.gmv_at_stake, ev=d.expected_value, ptype=d.prize_type,
                  draft=draft, llm=int(used_llm), hold=int(d.holdout), ts=source_ts, run=run_id),

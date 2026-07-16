@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fleek Retention Agent</title>
+<style>
+  :root{
+    --paper:#f4f5f2; --ink:#171a19; --ink2:#3d423b; --muted:#6b7168; --line:#e2e4de; --card:#fff;
+    --managed:#b45309; --serve:#0f766e; --risk:#b91c1c; --key:#5b46c9; --brand:#0f7a5a;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box;} html,body{margin:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;}
+  header{position:sticky;top:0;z-index:5;background:var(--ink);color:#eef0ea;padding:12px 20px;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:-.01em;}
+  header .sp{flex:1;}
+  header .wb{font-family:var(--mono);font-size:11px;color:#9aa093;}
+  button{font-family:var(--sans);font-size:12.5px;border:1px solid #3a3f38;background:#242822;color:#eef0ea;
+    padding:7px 12px;border-radius:7px;cursor:pointer;}
+  button:hover{background:#30352d;} button.primary{background:var(--brand);border-color:var(--brand);font-weight:600;}
+  button:disabled{opacity:.5;cursor:wait;}
+  label.tog{font-size:12px;color:#c5c9c0;display:flex;align-items:center;gap:5px;cursor:pointer;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px;}
+  .banner{border-radius:10px;padding:11px 16px;margin-bottom:10px;font-size:13px;}
+  .b-conc{background:#fdf1e3;border:1px solid #eccfa6;color:#7c4a12;} .b-conc b{font-size:18px;color:var(--managed);}
+  .b-key{background:#f0eefb;border:1px solid #ccc3ef;color:#3f318f;} .b-key b{color:#2e2373;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px;}
+  .chip{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:12px;}
+  .chip b{font-size:16px;} .chip span{color:var(--muted);}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+  input[type=search]{font-family:var(--sans);font-size:13px;padding:7px 11px;border:1px solid var(--line);
+    border-radius:7px;min-width:220px;background:var(--card);}
+  select{font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--card);}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;}
+  th{background:#fafbf9;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;}
+  tbody tr{cursor:pointer;} tbody tr:hover{background:#f7f8f5;}
+  td.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .play{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;}
+  .p-migrate_to_selfserve{background:#fdf1e3;color:var(--managed);} .p-grow_selfserve{background:#e7f6ef;color:var(--serve);}
+  .p-reengage{background:#fbe9e9;color:var(--risk);} .p-onboard{background:#efedfb;color:var(--key);}
+  .muted{color:var(--muted);font-size:11px;}
+  /* drawer */
+  #ov{position:fixed;inset:0;background:rgba(0,0,0,.28);display:none;z-index:10;}
+  #drawer{position:fixed;top:0;right:0;height:100%;width:460px;max-width:92vw;background:var(--paper);
+    box-shadow:-8px 0 30px rgba(0,0,0,.18);transform:translateX(100%);transition:transform .18s ease;
+    z-index:11;overflow-y:auto;padding:22px;}
+  #drawer.open{transform:none;} #ov.open{display:block;}
+  #drawer h2{font-family:var(--mono);font-size:16px;margin:0 0 2px;}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin:14px 0;}
+  .kv .k{color:var(--muted);} .kv .v{font-family:var(--mono);text-align:right;}
+  .sig{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;}
+  .sig span{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-family:var(--mono);font-size:11px;}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:13px;margin:12px 0;}
+  .box .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .draft{font-size:13.5px;color:#2c322b;white-space:pre-wrap;}
+  .oc{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#eef0ea;
+    padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;z-index:20;font-family:var(--mono);}
+  .toast.show{opacity:1;}
+  .empty{text-align:center;color:var(--muted);padding:50px;}
+  .flag{display:inline-block;background:#f0eefb;color:var(--key);font-family:var(--mono);font-size:10px;
+    padding:1px 6px;border-radius:5px;margin-left:6px;}
+</style></head>
+<body>
+<header>
+  <h1>Fleek Retention Agent</h1>
+  <span class="wb" id="wb"></span>
+  <span class="sp"></span>
+  <label class="tog"><input type="checkbox" id="llm"> use LLM drafts</label>
+  <button onclick="run('Accounts')">Run · Accounts</button>
+  <button onclick="run('new_accounts')">Run · new_accounts</button>
+  <button onclick="reset()">Reset</button>
+</header>
+
+<div class="wrap">
+  <div id="banners"></div>
+  <div class="chips" id="chips"></div>
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Search account id / reason…" oninput="render()">
+    <select id="playf" onchange="render()"><option value="">All plays</option></select>
+    <span class="muted" id="count"></span>
+  </div>
+  <table id="tbl"><thead><tr>
+    <th onclick="sortBy('account_id')">Account</th>
+    <th onclick="sortBy('segment')">Segment</th>
+    <th onclick="sortBy('play')">Play</th>
+    <th class="n" onclick="sortBy('expected_value')">EV ▾</th>
+    <th class="n" onclick="sortBy('gmv_at_stake')">Prize</th>
+    <th>Why</th>
+  </tr></thead><tbody id="rows"></tbody></table>
+  <div class="empty" id="empty" style="display:none">No run yet — hit <b>Run · Accounts</b> above.</div>
+</div>
+
+<div id="ov" onclick="closeDrawer()"></div>
+<div id="drawer"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+let STATE=null, SORT='expected_value', DIR=-1;
+const gbp=n=>'£'+Math.round(n||0).toLocaleString();
+const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800);};
+
+async function load(){
+  STATE=await (await fetch('/api/state')).json();
+  document.getElementById('wb').textContent=STATE.workbook?('data/raw/'+STATE.workbook):'no workbook in data/raw';
+  renderBanners(); renderChips(); renderPlayFilter(); render();
+}
+function renderBanners(){
+  const b=document.getElementById('banners'); let h='';
+  const c=STATE.concentration;
+  if(c&&c.broker_reliant_accounts){h+=`<div class="banner b-conc">⚠ Broker-dependency — <b>${c.pct_of_gmv}% of GMV</b> flows through ${c.broker_reliant_accounts} broker-reliant accounts (${c.pct_of_accounts}% of the book). Migration is the biggest scalability lever.</div>`;}
+  if(STATE.key_accounts&&STATE.key_accounts.length){
+    const items=STATE.key_accounts.map(k=>`<b>${k.account_id}</b> ${k.pct_of_gmv}% (${gbp(k.gmv_total)})`).join(' · ');
+    h+=`<div class="banner b-key">★ Key accounts — human-owned, handled personally: ${items}</div>`;}
+  b.innerHTML=h;
+}
+function renderChips(){
+  const s=STATE.counts||{}, p=STATE.plays||{};
+  const c=[['accounts',s.accounts||0],['with action',s.with_action||0],['holdout',STATE.holdout||0]];
+  let h=c.map(x=>`<div class="chip"><b>${x[1]}</b> <span>${x[0]}</span></div>`).join('');
+  Object.entries(p).filter(([k])=>k!=='(none)').sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{
+    h+=`<div class="chip"><b>${v}</b> <span>${k.replace(/_/g,' ')}</span></div>`;});
+  document.getElementById('chips').innerHTML=h;
+}
+function renderPlayFilter(){
+  const sel=document.getElementById('playf'); const cur=sel.value;
+  const plays=[...new Set((STATE.queue||[]).map(r=>r.play))];
+  sel.innerHTML='<option value="">All plays</option>'+plays.map(p=>`<option ${p===cur?'selected':''}>${p}</option>`).join('');
+}
+function render(){
+  const q=(document.getElementById('q').value||'').toLowerCase();
+  const pf=document.getElementById('playf').value;
+  let rows=(STATE.queue||[]).filter(r=>(!pf||r.play===pf)&&
+    (!q||(r.account_id+' '+(r.reason||'')).toLowerCase().includes(q)));
+  rows.sort((a,b)=>{const x=a[SORT],y=b[SORT];return (x>y?1:x<y?-1:0)*DIR;});
+  document.getElementById('empty').style.display=(STATE.queue||[]).length?'none':'block';
+  document.getElementById('count').textContent=rows.length+' shown';
+  document.getElementById('rows').innerHTML=rows.map(r=>`<tr onclick="open_('${r.account_id}')">
+    <td class="n">${r.account_id}</td>
+    <td>${r.segment||''}<br><span class="muted">${r.health||''}</span></td>
+    <td><span class="play p-${r.play}">${(r.play||'').replace(/_/g,' ')}</span>${r.feature?'<br><span class="muted">'+r.feature.replace(/_/g,' ')+'</span>':''}</td>
+    <td class="n">${gbp(r.expected_value)}</td>
+    <td class="n">${gbp(r.gmv_at_stake)}<br><span class="muted">${r.prize_type||''}</span></td>
+    <td>${(r.reason||'').replace(/</g,'&lt;')}</td></tr>`).join('');
+}
+function sortBy(k){DIR=(SORT===k)?-DIR:-1;SORT=k;render();}
+
+async function open_(aid){
+  const a=await (await fetch('/api/account/'+aid)).json();
+  const d=document.getElementById('drawer');
+  const sig=[['GMV 6mo',gbp(a.gmv_total)],['tier',a.transaction_mode||'—'],['persona',a.persona||'—'],['region',a.region||'—']];
+  d.innerHTML=`
+    <button onclick="closeDrawer()" style="float:right">✕</button>
+    <h2>${a.account_id}${a.holdout?'<span class="flag">HOLDOUT</span>':''}</h2>
+    <div class="muted">${a.segment} · ${a.health} · ${a.play?a.play.replace(/_/g,' '):'no action'}</div>
+    <div class="sig">${sig.map(s=>`<span>${s[0]}: ${s[1]}</span>`).join('')}</div>
+    <div class="kv">
+      <div class="k">Expected value</div><div class="v">${gbp(a.expected_value)}</div>
+      <div class="k">Prize (${a.prize_type||'—'})</div><div class="v">${gbp(a.gmv_at_stake)}</div>
+      <div class="k">Channel</div><div class="v">${a.channel||'—'}</div>
+    </div>
+    <div class="box"><div class="lbl">Why</div><div>${(a.reason||'').replace(/</g,'&lt;')}</div></div>
+    <div class="box"><div class="lbl">Next best action</div><div>${(a.action||'—').replace(/</g,'&lt;')}</div></div>
+    ${a.draft?`<div class="box"><div class="lbl">Drafted ${a.channel==='call'?'call note':'message'}</div><div class="draft">${a.draft.replace(/</g,'&lt;')}</div></div>`:''}
+    ${a.play&&!a.holdout?`<div class="box"><div class="lbl">Log outcome (feeds the learning loop)</div>
+      <div class="oc">
+        <button onclick="outcome('${a.account_id}',{responded:true})">Responded</button>
+        <button class="primary" onclick="outcome('${a.account_id}',{responded:true,converted:true})">Converted</button>
+        <button onclick="outcome('${a.account_id}',{responded:false})">No response</button>
+      </div></div>`:''}`;
+  document.getElementById('ov').classList.add('open'); d.classList.add('open');
+}
+function closeDrawer(){document.getElementById('ov').classList.remove('open');document.getElementById('drawer').classList.remove('open');}
+
+async function run(sheet){
+  const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
+  toast('Running '+sheet+'…');
+  const r=await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sheet,llm:document.getElementById('llm').checked})})).json();
+  btns.forEach(b=>b.disabled=false);
+  if(r.error){toast('Error: '+r.error);return;}
+  toast(`Run #${r.run_id}: ${r.n_new} new · ${r.n_changed} changed · ${r.n_unchanged_skipped} skipped`);
+  await load();
+}
+async function outcome(aid,o){
+  const r=await (await fetch('/api/outcome',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({account_id:aid,...o})})).json();
+  toast('Outcome logged for '+aid); closeDrawer(); load();
+}
+async function reset(){
+  if(!confirm('Wipe persisted state?'))return;
+  await fetch('/api/reset',{method:'POST'}); toast('State reset'); load();
+}
+load();
+</script>
+</body></html>

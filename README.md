@@ -80,8 +80,20 @@ python cli.py calibrate data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.x
 Add `--llm` to have Claude write the drafts (needs `ANTHROPIC_API_KEY`); without
 it, drafts are templated — real and personalised, just not model-written.
 
+### Live dashboard (optional)
+
+Prefer clicking to a CLI? There's a small web app over the same store and
+orchestrator — browse the queue, click into an account (signals, reason, draft),
+trigger a run, and log outcomes from the UI:
+
 ```bash
-pip install -r requirements-dev.txt && python -m pytest -q   # 27 tests
+uvicorn server.app:app --port 8000     # then open http://localhost:8000
+```
+
+It shares the same `data/state.db` as the CLI, so runs from either show up in both.
+
+```bash
+pip install -r requirements-dev.txt && python -m pytest -q   # 33 tests
 ```
 
 ## How it works
@@ -135,7 +147,8 @@ retention_agent/
   orchestrator.py  the loop: ingest -> diff -> decide -> draft -> persist -> report
   report.py        CSV / JSON / self-contained HTML outputs
 cli.py             run / status / calibrate / outcome / reset
-data/plays/        the three plays as markdown skills (edit behaviour here)
+server/app.py      optional FastAPI dashboard over the same store + orchestrator
+data/plays/        the plays as markdown skills (edit behaviour here)
 ```
 
 ### Reading behaviour, not labels
