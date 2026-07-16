@@ -23,9 +23,9 @@ import pandas as pd
 from fastapi import Body, FastAPI, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
-from retention_agent import config, ingest
+from retention_agent import config, ingest, plays
 from retention_agent.llm import LLM
-from retention_agent.models import Account, Decision
+from retention_agent.models import Account, Decision, skip_reason
 from retention_agent.orchestrator import run as run_loop
 from retention_agent.report import action_queue_csv
 from retention_agent.store import Store
@@ -37,6 +37,21 @@ STATIC = Path(__file__).parent / "static"
 MONTH_LABELS = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb"]
 # The two datasets summarised on the dashboard; the "Readme" tab is skipped.
 DATASET_SHEETS = ["Accounts", "new_accounts"]
+
+# The markdown "skills" the Plays tab visualises and edits. This is a fixed
+# whitelist (key → path) so a save can never write outside the two policy dirs —
+# no path traversal from the client. Plays carry per-account decision logic;
+# the two guides carry the cross-book reasoning and strategy the agent reads.
+def _skill_registry() -> dict[str, dict]:
+    reg: dict[str, dict] = {}
+    for md in sorted(config.PLAYS_DIR.glob("*.md")):
+        reg["plays/" + md.stem] = {"path": md, "kind": "play"}
+    for stem, title in (("analyst_guide", "Analyst guide — how to reason"),
+                        ("portfolio_overview", "Portfolio overview — strategy & facts")):
+        p = config.DATA_DIR / (stem + ".md")
+        if p.exists():
+            reg[stem] = {"path": p, "kind": "guide", "title": title}
+    return reg
 
 
 def _store() -> Store:
@@ -126,6 +141,47 @@ def dashboard():
     return out
 
 
+@app.get("/api/skills")
+def skills():
+    """The editable markdown behind every decision — the four plays plus the two
+    strategy guides. Plays are returned with their frontmatter parsed out (channel,
+    priority metric, the section headings) so the tab can render a plain-language
+    card, and with the raw source so it can be edited in place."""
+    out = []
+    for key, meta in _skill_registry().items():
+        text = meta["path"].read_text()
+        fm, body = plays._split_frontmatter(text)
+        out.append({
+            "key": key,
+            "kind": meta["kind"],
+            "title": meta.get("title") or fm.get("label") or fm.get("name") or key,
+            "path": meta["path"].relative_to(config.ROOT).as_posix(),
+            "frontmatter": fm,
+            "body": body.strip(),
+            "content": text,
+        })
+    return {"skills": out}
+
+
+@app.post("/api/skills/{key:path}")
+def save_skill(key: str, payload: dict = Body(...)):
+    """Persist an edited skill back to disk and drop the play cache so the next run
+    reasons over the new text. The key must be one we handed out — anything else is
+    rejected, so this can't be used to write arbitrary files."""
+    meta = _skill_registry().get(key)
+    if not meta:
+        return JSONResponse({"error": "unknown skill"}, status_code=404)
+    content = payload.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return JSONResponse({"error": "content required"}, status_code=400)
+    try:
+        meta["path"].write_text(content)
+    except OSError as e:  # read-only fs (serverless) or perms — surface, don't 500
+        return JSONResponse({"error": f"could not write: {e}"}, status_code=400)
+    plays.load_plays.cache_clear()   # next Analyst / fallback re-reads the file
+    return {"ok": True, "key": key}
+
+
 @app.get("/api/state")
 def state():
     """Everything the dashboard needs in one shot: banners + queue + history."""
@@ -142,6 +198,7 @@ def state():
             "holdout": s.holdout_count(),
             "runs": s.runs(),
             "queue": s.action_queue(),
+            "skipped": s.skipped(),
             "realized_rates": s.realized_rates(),
         }
     finally:
@@ -158,19 +215,29 @@ def account(aid: str):
         s.close()
 
 
-def _queue_row(a: Account, d: Decision) -> dict:
-    """The subset of a decision the live Action Queue card renders — shaped to match
-    the fields `store.action_queue()` returns, so a streamed row and a reloaded row
-    look identical. Only actionable, non-holdout accounts are streamed (the queue an
-    AM works never shows the control group or accounts left alone)."""
+def _detail(a: Account, d: Decision) -> dict:
+    """Everything the live view needs for one decided account, in one payload: a
+    superset of the Action-Queue card fields *and* the account-drawer fields, with
+    keys mirroring what `store.action_queue()` / `/api/account` return — so a
+    streamed card and drawer look identical to a reloaded one, and the drawer can
+    open any decided account *mid-run* straight from this cache (the store isn't
+    committed until the run ends). `draft` is written after the decision loop, so
+    it's null live and fills in on the post-run reconcile."""
     return {
         "account_id": a.account_id,
+        # account signals — for the drawer (keys mirror the persisted row)
+        "gmv_total": a.gmv_total_6m,
+        "transaction_mode": a.transaction_mode,
+        "persona": a.buyer_persona,
+        "region": a.region,
+        # the decision
         "segment": d.segment, "health": d.health,
         "play": d.play, "feature": d.feature,
         "action": d.action, "reason": d.reason, "channel": d.channel,
         "expected_value": d.expected_value, "gmv_at_stake": d.gmv_at_stake,
-        "prize_type": d.prize_type,
+        "prize_type": d.prize_type, "holdout": d.holdout,
         "decided_by": d.decided_by, "agent_rationale": d.agent_rationale,
+        "draft": None,
     }
 
 
@@ -180,10 +247,12 @@ def do_run(payload: dict = Body(default={})):
     each account is decided — an agent run evaluates one account at a time and is
     slow, so waiting for the whole book before showing anything felt like a hang.
 
-    Events: {type:progress, done, total, account_id} for every decided account;
-    {type:row, row:{…}} for each one that lands in the queue; {type:done, report}
-    at the end; {type:error, error} on failure. Drafts are LLM-written by default
-    whenever a key is present (no user toggle) — otherwise templated."""
+    Events: one {type:decided, done, total, detail:{…}, queued, skip_reason} per
+    decided account — `queued` when it lands in the AM's queue, else `skip_reason`
+    (holdout | key_account | no_action) says why it didn't. `detail` carries the
+    full card+drawer payload so the UI can render and open any account mid-run.
+    Then {type:done, report} at the end; {type:error, error} on failure. Drafts are
+    LLM-written by default whenever a key is present (no user toggle) — else templated."""
     wb = _workbook()
     if not wb:
         return JSONResponse({"error": "no workbook — upload an .xlsx first"}, status_code=400)
@@ -199,10 +268,10 @@ def do_run(payload: dict = Body(default={})):
         s = _store()
         try:
             def on_decision(a, d, done, total):
-                events.put({"type": "progress", "done": done, "total": total,
-                            "account_id": a.account_id})
-                if d.play and not d.holdout:
-                    events.put({"type": "row", "row": _queue_row(a, d)})
+                skip = skip_reason(d.holdout, d.play, d.reason)
+                events.put({"type": "decided", "done": done, "total": total,
+                            "detail": _detail(a, d),
+                            "queued": skip is None, "skip_reason": skip})
             report = run_loop(wb, sheet, s, use_llm=use_llm, use_agent=use_agent,
                               source_ts=os.path.getmtime(wb), on_decision=on_decision)
             events.put({"type": "done", "report": report.model_dump()})
