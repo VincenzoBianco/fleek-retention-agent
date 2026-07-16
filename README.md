@@ -60,37 +60,30 @@ cp .env.example .env            # optional: add ANTHROPIC_API_KEY for LLM-writte
 # Drop Fleek's workbook in first (it's not committed — see Data below):
 #   data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx
 
-python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx
-open out/index.html             # the ranked action queue
+uvicorn server.app:app --port 8000    # then open http://localhost:8000
 ```
 
-Then prove it keeps running:
+Everything happens in the browser: hit **Run · Accounts** to process the book,
+browse the ranked action queue, search / sort / filter by play, click any account
+for its signals, reason, next best action and drafted message, then **Run ·
+new_accounts** to prove it picks up the batch without duplicating. **Log outcomes**
+(Responded / Converted) on an account and they feed the learning loop. There are
+no static files — the SQLite store is the source of truth and the app renders it
+live. Tick **use LLM drafts** to have Claude write the outreach (needs
+`ANTHROPIC_API_KEY`); off, drafts are templated but real.
+
+### Headless / cron (same engine, no browser)
+
+The morning job can run without the UI — it updates the same `data/state.db`:
 
 ```bash
-# same file again -> 0 new, 0 changed, everything skipped (idempotent)
 python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx
-
-# the second batch -> 45 new + 5 changed overlaps, no duplicates
-python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx --sheet new_accounts
-
-python cli.py status            # book state + run history
-python cli.py calibrate data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx  # the empirical priors
+python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx    # again -> all skipped (idempotent)
+python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx --sheet new_accounts   # 45 new + 5 changed
+python cli.py status
+python cli.py calibrate data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx   # empirical priors + tiers
+python cli.py run <workbook> --export queue.csv   # optional CSV dump of the action queue
 ```
-
-Add `--llm` to have Claude write the drafts (needs `ANTHROPIC_API_KEY`); without
-it, drafts are templated — real and personalised, just not model-written.
-
-### Live dashboard (optional)
-
-Prefer clicking to a CLI? There's a small web app over the same store and
-orchestrator — browse the queue, click into an account (signals, reason, draft),
-trigger a run, and log outcomes from the UI:
-
-```bash
-uvicorn server.app:app --port 8000     # then open http://localhost:8000
-```
-
-It shares the same `data/state.db` as the CLI, so runs from either show up in both.
 
 ```bash
 pip install -r requirements-dev.txt && python -m pytest -q   # 33 tests
@@ -113,7 +106,7 @@ flowchart LR
     SKIP --> ST
   end
 
-  ST --> OUT["action queue<br/>CSV · JSON · HTML"]
+  ST --> OUT["live app (localhost)<br/>queue · account · CSV export"]
   OUT --> H["human or agent<br/>sends / calls / edits"]
   H -.->|outcomes feed back| ST
 ```
@@ -145,7 +138,7 @@ retention_agent/
   store.py         SQLite state + new/changed/unchanged/stale diff + outcomes
   learning.py      close the loop: blend EV priors toward measured outcomes
   orchestrator.py  the loop: ingest -> diff -> decide -> draft -> persist -> report
-  report.py        CSV / JSON / self-contained HTML outputs
+  report.py        action-queue CSV export (served by the app / --export)
 cli.py             run / status / calibrate / outcome / reset
 server/app.py      optional FastAPI dashboard over the same store + orchestrator
 data/plays/        the plays as markdown skills (edit behaviour here)
@@ -311,9 +304,9 @@ shaped the growth logic:
 **First 30 days.** *Week 1:* take ACC-001 (20% of the book) as a personally-owned
 key account, then work the queue by expected value — the genuinely-churning
 accounts (`reengage`) first, the 63 new accounts into proactive onboarding, then
-the migration targets. *Week 4:* it's the morning job — I open `out/index.html`,
-the new/changed accounts are already decided and drafted, and I spend my time on
-the accounts that genuinely need a human, not on re-triaging the whole book.
+the migration targets. *Week 4:* it's the morning job — I open the app, the
+new/changed accounts are already decided and drafted, and I spend my time on the
+accounts that genuinely need a human, not on re-triaging the whole book.
 
 **Migration.** The 36 material broker-reliant accounts, ranked by expected value
 (conversion probability × the exposure × modest expansion — *not* the raw £ on a

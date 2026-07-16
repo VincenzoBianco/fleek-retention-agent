@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 PLAYS_DIR = DATA_DIR / "plays"
-OUT_DIR = ROOT / "out"
 STATE_DB = DATA_DIR / "state.db"
 
 # Monthly GMV columns, in calendar order. The window is Sep 2025 -> Feb 2026.

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Fleek Retention Agent — command line.
 
-    python cli.py run    <workbook.xlsx> [--sheet Accounts] [--llm] [--out out]
+    python cli.py run    <workbook.xlsx> [--sheet Accounts] [--llm] [--export queue.csv]
     python cli.py status
     python cli.py reset
 
-`run` is the morning job: ingest a tab, update the book idempotently, write the
-action queue (CSV/JSON/HTML). Point it at the same file twice and the second run
-skips everything; point it at the new_accounts tab and only new/changed accounts
-are touched.
+`run` is the morning job: ingest a tab, update the book idempotently in SQLite.
+Point it at the same file twice and the second run skips everything; point it at
+new_accounts and only new/changed accounts are touched. There's no static report
+— view and drive the book from the live app (`uvicorn server.app:app`); `--export`
+optionally dumps the action queue to a CSV file for headless use.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from retention_agent import config
 from retention_agent.orchestrator import run as run_loop
-from retention_agent.report import write_all
+from retention_agent.report import action_queue_csv
 from retention_agent.store import Store
 
 
@@ -28,7 +29,6 @@ def _run(args):
     # a re-run without the user having to think about it (--source-ts overrides).
     ts = args.source_ts if args.source_ts else Path(args.workbook).stat().st_mtime
     report = run_loop(args.workbook, args.sheet, store, use_llm=args.llm, source_ts=ts)
-    out = write_all(store, report, Path(args.out))
     print(f"Run #{report.run_id}  ({report.source})")
     c = report.gmv_concentration
     if c:
@@ -46,7 +46,10 @@ def _run(args):
                             for k, v in report.learned_priors.items())
         print(f"  learned priors from outcomes: {learned}")
     print(f"  plays: {report.play_counts}")
-    print(f"  wrote: {out['csv']}  {out['html']}")
+    if args.export:
+        Path(args.export).write_text(action_queue_csv(store))
+        print(f"  exported action queue → {args.export}")
+    print(f"  view/run in the app:  uvicorn server.app:app --port 8000")
     store.close()
 
 
@@ -111,7 +114,7 @@ def main(argv=None):
     r.add_argument("workbook")
     r.add_argument("--sheet", default="Accounts")
     r.add_argument("--llm", action="store_true", help="use Claude to draft (needs ANTHROPIC_API_KEY)")
-    r.add_argument("--out", default=str(config.OUT_DIR))
+    r.add_argument("--export", default="", help="optional: write the action queue to this CSV path")
     r.add_argument("--source-ts", type=float, default=0.0, dest="source_ts",
                    help="source recency (epoch); newer wins on re-run. Defaults to file mtime.")
     r.set_defaults(fn=_run)

@@ -16,10 +16,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import Body, FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from retention_agent import config
 from retention_agent.orchestrator import run as run_loop
+from retention_agent.report import action_queue_csv
 from retention_agent.store import Store
 
 app = FastAPI(title="Fleek Retention Agent")
@@ -102,6 +103,16 @@ def do_outcome(payload: dict = Body(...)):
                          converted=bool(payload.get("converted")),
                          gmv_delta=float(payload.get("gmv_delta", 0) or 0))
         return {"ok": True, "realized_rates": s.realized_rates()}
+    finally:
+        s.close()
+
+
+@app.get("/api/queue.csv")
+def queue_csv():
+    s = _store()
+    try:
+        return Response(action_queue_csv(s), media_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=action_queue.csv"})
     finally:
         s.close()
 
