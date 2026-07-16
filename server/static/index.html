@@ -4,8 +4,12 @@
 <title>Fleek Retention Agent</title>
 <style>
   :root{
-    --paper:#f4f5f2; --ink:#171a19; --ink2:#3d423b; --muted:#6b7168; --line:#e2e4de; --card:#fff;
+    --paper:#eef1f5; --ink:#171a19; --ink2:#3d423b; --muted:#6b7168; --line:#e2e4de; --card:#fff;
     --managed:#b45309; --serve:#0f766e; --risk:#b91c1c; --key:#5b46c9; --brand:#0f7a5a;
+    /* dashboard look-and-feel: cool gray page, soft-shadowed white cards */
+    --d-bg:#eef1f5; --d-card:#fff; --d-line:#eceff3; --d-label:#8a909c; --d-value:#2b2f38;
+    --d-blue:#6f9fd8; --d-green:#3fa45b; --d-red:#d9584f;
+    --shadow:0 1px 3px rgba(16,24,40,.07),0 1px 2px rgba(16,24,40,.04);
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,sans-serif;
   }
@@ -62,10 +66,101 @@
   .empty{text-align:center;color:var(--muted);padding:50px;}
   .flag{display:inline-block;background:#f0eefb;color:var(--key);font-family:var(--mono);font-size:10px;
     padding:1px 6px;border-radius:5px;margin-left:6px;}
+  /* ---- tabs ---- */
+  .tabs{display:flex;gap:4px;}
+  .tab{background:transparent;border:1px solid transparent;color:#9aa093;padding:6px 13px;border-radius:7px;font-weight:600;}
+  .tab:hover{background:#242822;color:#eef0ea;}
+  .tab.active{background:var(--brand);border-color:var(--brand);color:#fff;}
+  /* ---- dashboard: page + controls ---- */
+  #view-dashboard{background:var(--d-bg);}
+  .dtitle{font-size:20px;font-weight:600;color:var(--d-value);letter-spacing:-.01em;margin:2px 0 16px;}
+  .dtitle span{font-size:12px;font-weight:400;color:var(--d-label);font-family:var(--mono);margin-left:8px;}
+  .dbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px;}
+  .seg,.tiers{display:inline-flex;background:var(--d-card);border-radius:9px;padding:3px;gap:2px;box-shadow:var(--shadow);}
+  .seg button,.tiers button{background:transparent;border:none;color:#5b6270;font-size:12.5px;padding:6px 12px;border-radius:7px;font-weight:500;transition:background .12s,color .12s;}
+  .seg button:hover,.tiers button:hover{background:#f2f5f9;}
+  .seg button.on{background:var(--d-blue);color:#fff;}
+  .tiers button.on{color:#fff;}
+  .tiers button.on[data-t=self_serve]{background:#0d9488;} .tiers button.on[data-t=hybrid]{background:#6d28d9;}
+  .tiers button.on[data-t=manual]{background:#c2610c;} .tiers button.on[data-t=""]{background:var(--d-blue);}
+  .mlab{font-size:11px;color:var(--d-label);display:flex;align-items:center;gap:6px;}
+  #view-dashboard select{border:1px solid #e2e6ec;border-radius:8px;box-shadow:var(--shadow);color:var(--d-value);}
+  .sec{font-size:12.5px;font-weight:600;letter-spacing:.01em;color:#5b6270;margin:26px 0 12px;display:flex;align-items:baseline;gap:8px;}
+  .sec .muted{font-weight:400;color:var(--d-label);}
+  /* ---- scorecard ---- */
+  .scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px;}
+  .score{background:var(--d-card);border-radius:13px;padding:16px 18px;box-shadow:var(--shadow);}
+  .score .lbl{font-size:11.5px;color:var(--d-label);font-weight:500;}
+  .score .val{font-size:29px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:7px;letter-spacing:-.02em;color:var(--d-value);line-height:1.05;}
+  .score .d{font-size:12px;margin-top:6px;}
+  .score .d .chg{font-weight:600;} .score .d .chg.up{color:var(--d-green);} .score .d .chg.dn{color:var(--d-red);} .score .d .chg.flat{color:var(--d-label);}
+  .score .d .vs{color:var(--d-label);margin-left:5px;font-size:11px;}
+  .score.book{background:#f7f9fb;box-shadow:none;border:1px dashed #dde2e9;}
+  .score .tag{font-size:10px;color:#a2a8b2;margin-top:6px;}
+  .note{background:#f4f7fb;border:1px solid #e3e9f1;color:#5b6472;font-size:11.5px;border-radius:10px;padding:10px 13px;margin-top:12px;line-height:1.5;}
+  .note b{color:#3a424e;}
+  /* ---- charts ---- */
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px;}
+  .cardc{background:var(--d-card);border-radius:13px;padding:16px 18px 10px;box-shadow:var(--shadow);}
+  .cardc.full{grid-column:1/-1;}
+  .cardc .ct{font-size:13px;font-weight:600;color:var(--d-value);}
+  .cardc .cs{font-size:11px;color:var(--d-label);margin:2px 0 10px;}
+  .chart{width:100%;height:auto;display:block;}
+  .chart .gl{stroke:#eef1f5;stroke-width:1;}
+  .chart .ax{fill:#9aa0aa;font-family:var(--sans);font-size:9.5px;}
+  .chart .yax{text-anchor:end;} .chart .xax{text-anchor:middle;}
+  .chart .vlab{fill:#5b6270;text-anchor:middle;font-size:9.5px;font-weight:600;}
+  .chart .hit{cursor:crosshair;}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#5b6270;margin:2px 0 8px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .legend i.ln{height:3px;border-radius:2px;width:15px;}
+  /* ---- deep dive ---- */
+  .ddwrap{display:grid;grid-template-columns:264px 1fr;gap:16px;align-items:start;}
+  .ddside{background:var(--d-card);border-radius:13px;padding:16px;box-shadow:var(--shadow);}
+  .metrics{display:flex;flex-direction:column;gap:8px;margin:12px 0;}
+  .metrics label{display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer;color:var(--d-value);}
+  .metrics label i{width:11px;height:11px;border-radius:3px;}
+  .ddstats{border-top:1px solid var(--d-line);padding-top:12px;margin-top:4px;
+    display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12px;}
+  .ddstats .k{color:var(--d-label);} .ddstats .v{font-family:var(--mono);text-align:right;color:var(--d-value);}
+  .ddcharts{display:grid;grid-template-columns:1fr;gap:16px;}
+  .ctip{position:fixed;z-index:30;background:#2b2f38;color:#eef0f3;font-size:11.5px;
+    padding:8px 11px;border-radius:8px;pointer-events:none;display:none;box-shadow:0 6px 18px rgba(16,24,40,.22);}
+  .ctip i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;}
+  .ctip b{font-size:12px;} .ctip div{margin-top:3px;white-space:nowrap;}
+  /* ranked bars (region/persona) */
+  .rbars{display:flex;flex-direction:column;gap:9px;margin-top:4px;}
+  .rbar{display:grid;grid-template-columns:120px 1fr auto;align-items:center;gap:10px;font-size:12px;}
+  .rbl{color:var(--d-value);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rbtrack{background:#f0f3f7;border-radius:5px;height:12px;overflow:hidden;}
+  .rbfill{height:100%;border-radius:5px;}
+  .rbv{font-family:var(--mono);color:var(--d-value);text-align:right;white-space:nowrap;}
+  .rbv span{color:var(--d-label);margin-left:6px;font-size:11px;}
+  /* dashboard tables (movers) */
+  .dtbl{width:100%;border-collapse:collapse;background:var(--d-card);border-radius:13px;overflow:hidden;box-shadow:var(--shadow);}
+  .dtbl th,.dtbl td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--d-line);font-size:12.5px;}
+  .dtbl th{background:#f7f9fb;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--d-label);font-weight:600;font-family:var(--sans);}
+  .dtbl tr:last-child td{border-bottom:none;}
+  .dtbl td.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .dtbl .up{color:var(--d-green);} .dtbl .dn{color:var(--d-red);}
+  .pill{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;color:#fff;}
+  .lboards{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  /* data-quality tiles */
+  .dqgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .dqtile{background:var(--d-card);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);}
+  .dqtile .n{font-size:24px;font-weight:700;color:var(--d-value);}
+  .dqtile.ok .n{color:var(--d-green);}
+  .dqtile .l{font-size:11.5px;color:var(--d-label);margin-top:3px;}
+  @media(max-width:720px){.ddwrap{grid-template-columns:1fr;}.lboards{grid-template-columns:1fr;}.rbar{grid-template-columns:90px 1fr auto;}}
 </style></head>
 <body>
 <header>
   <h1>Fleek Retention Agent</h1>
+  <div class="tabs">
+    <button class="tab active" data-t="queue" onclick="showTab('queue')">Action Queue</button>
+    <button class="tab" data-t="dashboard" onclick="showTab('dashboard')">Dashboard</button>
+  </div>
   <span class="wb" id="wb"></span>
   <span class="sp"></span>
   <span id="llmstatus" class="wb"></span>
@@ -78,7 +173,7 @@
   <button onclick="reset()">Reset</button>
 </header>
 
-<div class="wrap">
+<div class="wrap" id="view-queue">
   <div id="banners"></div>
   <div class="chips" id="chips"></div>
   <div class="toolbar">
@@ -97,6 +192,47 @@
   <div class="empty" id="empty" style="display:none"></div>
 </div>
 
+<div class="wrap" id="view-dashboard" style="display:none">
+  <div class="dtitle">Portfolio Dashboard <span id="dtWb"></span></div>
+  <div class="dbar">
+    <div class="seg" id="sheetSeg"></div>
+    <div class="tiers" id="tierSeg"></div>
+    <span class="sp"></span>
+    <label class="mlab">Month <select id="monthSel" onchange="setMonth(this.value)"></select></label>
+  </div>
+
+  <h3 class="sec">Monthly snapshot <span class="muted" id="scMeta"></span></h3>
+  <div class="scores" id="scores"></div>
+  <div class="note" id="scNote"></div>
+
+  <h3 class="sec">Portfolio charts <span class="muted">— respond to the tier filter above</span></h3>
+  <div class="charts" id="charts"></div>
+
+  <h3 class="sec">Segments &amp; geography</h3>
+  <div class="charts" id="segCharts"></div>
+
+  <h3 class="sec">Largest movers <span class="muted" id="moversMeta"></span></h3>
+  <div id="movers"></div>
+
+  <h3 class="sec">Momentum leaderboard <span class="muted">— growth over the window (material accounts)</span></h3>
+  <div id="momentum"></div>
+
+  <h3 class="sec">Engagement &amp; data quality</h3>
+  <div class="charts" id="engdq"></div>
+
+  <h3 class="sec">Account deep-dive</h3>
+  <div class="ddwrap">
+    <div class="ddside">
+      <label class="mlab" style="width:100%">Account
+        <select id="accSel" onchange="setAcc(this.value)" style="flex:1"></select></label>
+      <div class="metrics" id="metricBoxes"></div>
+      <div class="ddstats" id="ddStats"></div>
+    </div>
+    <div class="ddcharts" id="ddCharts"></div>
+  </div>
+</div>
+
+<div class="ctip" id="ctip"></div>
 <div id="ov" onclick="closeDrawer()"></div>
 <div id="drawer"></div>
 <div class="toast" id="toast"></div>
@@ -214,6 +350,436 @@ async function reset(){
   if(!confirm('Wipe persisted state?'))return;
   await fetch('/api/reset',{method:'POST'}); toast('State reset'); load();
 }
+
+/* ======================= DASHBOARD ======================= */
+let DASH=null, DSHEET='Accounts', DTIER='', DMONTH=5, DACC=null, DMETRICS=['gmv'];
+const CHARTS={};                               // registry for line-chart hover
+const TIER_COL={self_serve:'#0d9488',hybrid:'#6d28d9',manual:'#c2610c'};
+const TIER_LAB={self_serve:'Self-serve',hybrid:'Hybrid',manual:'Manual'};
+const TIER_ORDER=['self_serve','hybrid','manual'];
+
+function gbpK(n){n=n||0;const a=Math.abs(n);
+  if(a>=1e6)return '£'+(n/1e6).toFixed(1)+'m';
+  if(a>=1e3)return '£'+(n/1e3).toFixed(a>=1e4?0:1)+'k';
+  return '£'+Math.round(n);}
+const pctFmt=n=>(Math.round(n*10)/10)+'%';
+const signPct=n=>(n>=0?'+':'')+(Math.round(n*10)/10)+'%';
+function niceMax(v){if(!isFinite(v)||v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;
+  const s=n<=1?1:n<=1.5?1.5:n<=2?2:n<=2.5?2.5:n<=5?5:10;return s*p;}
+function axisScale(lo,hi){
+  if(hi<=lo)hi=lo+1;
+  const span=hi-lo,p=Math.pow(10,Math.floor(Math.log10(span))),n=span/p;
+  const step=(n<=1?0.2:n<=2?0.5:n<=5?1:2)*p;
+  const start=Math.floor(lo/step)*step,end=Math.ceil(hi/step)*step,t=[];
+  for(let v=start;v<=end+step*1e-6;v+=step)t.push(Math.round(v*1e6)/1e6);
+  return {lo:start,hi:end,ticks:t};
+}
+const esc=s=>(''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+function smoothPath(pts){                       // Catmull-Rom -> cubic bezier
+  if(pts.length<3)return 'M'+pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
+  let d='M'+pts[0][0].toFixed(1)+','+pts[0][1].toFixed(1);
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2;
+    const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
+    const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+    d+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+const MET={
+  gmv:  {label:'Monthly GMV',        color:'#0d9488', fmt:gbpK, neg:false},
+  cum:  {label:'Cumulative GMV',     color:'#6d28d9', fmt:gbpK, neg:false},
+  mom:  {label:'MoM change %',       color:'#c2610c', fmt:pctFmt, neg:true},
+  share:{label:'Share of book GMV %',color:'#b91c1c', fmt:pctFmt, neg:false},
+};
+
+async function showTab(t){
+  document.getElementById('view-queue').style.display=t==='queue'?'':'none';
+  document.getElementById('view-dashboard').style.display=t==='dashboard'?'':'none';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
+  if(t==='dashboard')await loadDash();
+}
+async function loadDash(){
+  if(!DASH){
+    DASH=await (await fetch('/api/dashboard')).json();
+    if(DASH.error){document.getElementById('charts').innerHTML='<div class="note">'+esc(DASH.error)+'</div>';return;}
+    DACC=(DASH.sheets[DSHEET][0]||{}).account_id||null;
+    buildShell();
+  }
+  renderDash();
+}
+function sheetRecs(){return DASH.sheets[DSHEET]||[];}
+function recs(){return sheetRecs().filter(r=>!DTIER||r.tier===DTIER);}
+
+function buildShell(){
+  document.getElementById('dtWb').textContent=DASH.workbook||'';
+  document.getElementById('sheetSeg').innerHTML=
+    [['Accounts','Accounts (300)'],['new_accounts','New accounts (50)']]
+    .map(([k,l])=>`<button data-s="${k}" class="${k===DSHEET?'on':''}" onclick="setSheet('${k}')">${l}</button>`).join('');
+  document.getElementById('tierSeg').innerHTML=
+    [['','All tiers'],...TIER_ORDER.map(t=>[t,TIER_LAB[t]])]
+    .map(([k,l])=>`<button data-t="${k}" class="${k===DTIER?'on':''}" onclick="setTier('${k}')">${l}</button>`).join('');
+  document.getElementById('monthSel').innerHTML=
+    DASH.months.map((m,i)=>`<option value="${i}" ${i===DMONTH?'selected':''}>${m}</option>`).join('');
+  document.getElementById('metricBoxes').innerHTML=Object.entries(MET)
+    .map(([k,m])=>`<label><input type="checkbox" value="${k}" ${DMETRICS.includes(k)?'checked':''}
+      onchange="toggleMetric()"><i style="background:${m.color}"></i>${m.label}</label>`).join('');
+  populateAccSel();
+}
+function populateAccSel(){
+  const sel=document.getElementById('accSel');
+  const opts=[...sheetRecs()].sort((a,b)=>b.gmv_total-a.gmv_total);
+  if(!opts.some(o=>o.account_id===DACC))DACC=(opts[0]||{}).account_id||null;
+  sel.innerHTML=opts.map(o=>`<option value="${o.account_id}" ${o.account_id===DACC?'selected':''}>${o.account_id} · ${gbpK(o.gmv_total)} · ${TIER_LAB[o.tier]}</option>`).join('');
+}
+function setSheet(s){DSHEET=s;buildShell();renderDash();}
+function setTier(t){DTIER=t;
+  document.querySelectorAll('#tierSeg button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  renderAggregates();}
+function setMonth(m){DMONTH=+m;renderScorecard();renderMovers();}
+function setAcc(a){DACC=a;renderDeepDive();}
+function toggleMetric(){
+  DMETRICS=[...document.querySelectorAll('#metricBoxes input:checked')].map(c=>c.value);
+  renderDeepDive();}
+
+function renderAggregates(){renderScorecard();renderCharts();renderBreakdowns();renderMovers();renderMomentum();renderEngDQ();}
+function renderDash(){renderAggregates();renderDeepDive();}
+
+/* ---------- scorecard ---------- */
+function monthAgg(R,m){
+  const gmv=R.reduce((s,r)=>s+r.monthly[m],0);
+  const active=R.filter(r=>r.monthly[m]>0).length;
+  return {gmv,active,pctActive:R.length?active/R.length*100:0,avg:active?gmv/active:0};
+}
+function deltaHTML(cur,prev,fmt,pp){
+  const vs=DMONTH>0?`vs ${DASH.months[DMONTH-1]}`:'';
+  if(prev==null)return `<div class="d"><span class="chg flat">—</span></div>`;
+  if(pp){const d=cur-prev,c=d>0.05?'up':d<-0.05?'dn':'flat';
+    return `<div class="d"><span class="chg ${c}">${d>0?'↑':d<0?'↓':'–'} ${signPct(d)}pp</span><span class="vs">${vs}</span></div>`;}
+  if(prev===0)return `<div class="d"><span class="chg flat">–</span><span class="vs">${vs}</span></div>`;
+  const d=(cur-prev)/prev*100,c=d>0.5?'up':d<-0.5?'dn':'flat';
+  return `<div class="d"><span class="chg ${c}">${d>0?'↑':d<0?'↓':'–'} ${signPct(d)}</span><span class="vs">${vs}</span></div>`;
+}
+function renderScorecard(){
+  const R=recs(),m=DMONTH,cur=monthAgg(R,m),prev=m>0?monthAgg(R,m-1):null;
+  const orders6=R.reduce((s,r)=>s+r.orders,0), gmv6=R.reduce((s,r)=>s+r.gmv_total,0);
+  const aov6=orders6?gmv6/orders6:0;
+  const manOrders=R.reduce((s,r)=>s+r.manual_pct/100*r.orders,0);   // manual_pct = manual/orders*100
+  const pctManual=orders6?manOrders/orders6*100:0;                  // order-weighted book reliance
+  document.getElementById('scMeta').textContent=
+    `${DASH.months[m]} · ${DTIER?TIER_LAB[DTIER]:'all tiers'} · ${R.length} accounts`;
+  const cards=[
+    {lbl:`GMV · ${DASH.months[m]}`,val:gbpK(cur.gmv),d:deltaHTML(cur.gmv,prev&&prev.gmv,gbpK)},
+    {lbl:'Active accounts',val:cur.active,d:deltaHTML(cur.active,prev&&prev.active)},
+    {lbl:'% accounts active',val:pctFmt(cur.pctActive),d:deltaHTML(cur.pctActive,prev&&prev.pctActive,null,true)},
+    {lbl:'Avg GMV / active acct',val:gbpK(cur.avg),d:deltaHTML(cur.avg,prev&&prev.avg,gbpK)},
+    {lbl:'Orders',val:orders6.toLocaleString(),book:true,tag:'6-mo total · no monthly split'},
+    {lbl:'AOV (blended)',val:gbpK(aov6),book:true,tag:'6-mo GMV ÷ 6-mo orders'},
+    {lbl:'% manual orders',val:pctFmt(pctManual),book:true,tag:'6-mo · orders placed by an AM'},
+  ];
+  document.getElementById('scores').innerHTML=cards.map(c=>`
+    <div class="score ${c.book?'book':''}"><div class="lbl">${c.lbl}</div>
+      <div class="val">${c.val}</div>
+      ${c.book?`<div class="tag">${c.tag}</div>`:c.d}</div>`).join('');
+  document.getElementById('scNote').innerHTML=
+    `<b>Reading these:</b> GMV, active accounts, % active and avg spend are true monthly figures with month-over-month deltas.
+     <b>“Active” = placed ≥ £1 of GMV that month</b> — the file has no per-month order counts (only 6-month totals), so a monthly “% with an order” isn’t derivable; active-by-GMV is the honest proxy.
+     Orders and AOV are therefore shown as 6-month book totals, not monthly.`;
+}
+
+/* ---------- charts ---------- */
+function legend(items){return `<div class="legend">${items.map(i=>
+  `<span><i class="${i.line?'ln':''}" style="background:${i.color};${i.dash?'opacity:.55':''}"></i>${i.name}</span>`).join('')}</div>`;}
+
+function lineChart(id,{series,xLabels,yfmt,neg,area,smooth=true,dots=true,W=560,H=280}){
+  const P={l:56,r:16,t:12,b:40},iw=W-P.l-P.r,ih=H-P.t-P.b,n=xLabels.length;
+  let lo=0,hi=0;series.forEach(s=>s.points.forEach(v=>{if(v>hi)hi=v;if(v<lo)lo=v;}));
+  if(!neg)lo=0; if(hi===lo)hi=lo+1;
+  const sc=axisScale(lo,hi);
+  const xOf=i=>n<=1?P.l+iw/2:P.l+iw*i/(n-1);
+  const yOf=v=>P.t+ih*(1-(v-sc.lo)/(sc.hi-sc.lo));
+  const base=yOf(sc.lo);
+  let g='';
+  sc.ticks.forEach(t=>{const y=yOf(t);g+=`<line class="gl" x1="${P.l}" y1="${y}" x2="${P.l+iw}" y2="${y}"/><text class="ax yax" x="${P.l-8}" y="${y+3}">${yfmt(t)}</text>`;});
+  xLabels.forEach((lb,i)=>{if(lb!=='')g+=`<text class="ax xax" x="${xOf(i)}" y="${P.t+ih+15}">${lb}</text>`;});
+  series.forEach(s=>{
+    const P2=s.points.map((v,i)=>[xOf(i),yOf(v)]);
+    const path=smooth?smoothPath(P2):'M'+P2.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
+    if(area&&!s.dash){
+      const last=P2[P2.length-1][0].toFixed(1),first=P2[0][0].toFixed(1);
+      g+=`<path d="${path} L${last},${base.toFixed(1)} L${first},${base.toFixed(1)} Z" fill="${s.color}" opacity="0.15"/>`;
+    }
+    g+=`<path d="${path}" fill="none" stroke="${s.color}" stroke-width="${s.dash?1.6:2.4}" stroke-linejoin="round" ${s.dash?'stroke-dasharray="4 3" opacity=".5"':''}/>`;
+    if(dots&&!s.dash)P2.forEach(p=>g+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.6" fill="#fff" stroke="${s.color}" stroke-width="1.6"/>`);
+  });
+  g+=`<rect class="hit" x="${P.l}" y="${P.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
+  CHARTS[id]={xLabels,series,yfmt,P,iw,W};
+  return `<svg id="${id}" viewBox="0 0 ${W} ${H}" class="chart" onmousemove="chartHover(event,'${id}')" onmouseleave="chartLeave()">${g}</svg>`;
+}
+function stackedArea(id,{series,xLabels,yfmt,W=560,H=280}){
+  const P={l:56,r:16,t:12,b:40},iw=W-P.l-P.r,ih=H-P.t-P.b,n=xLabels.length;
+  const totals=xLabels.map((_,i)=>series.reduce((s,se)=>s+se.points[i],0));
+  const sc=axisScale(0,Math.max(...totals,1));
+  const xOf=i=>n<=1?P.l+iw/2:P.l+iw*i/(n-1);
+  const yOf=v=>P.t+ih*(1-(v-sc.lo)/(sc.hi-sc.lo));
+  let g='';
+  sc.ticks.forEach(t=>{const y=yOf(t);g+=`<line class="gl" x1="${P.l}" y1="${y}" x2="${P.l+iw}" y2="${y}"/><text class="ax yax" x="${P.l-8}" y="${y+3}">${yfmt(t)}</text>`;});
+  xLabels.forEach((lb,i)=>{if(lb!=='')g+=`<text class="ax xax" x="${xOf(i)}" y="${P.t+ih+15}">${lb}</text>`;});
+  const lower=xLabels.map(()=>0);
+  series.forEach(se=>{
+    const upper=se.points.map((v,i)=>lower[i]+v);
+    const topPts=upper.map((v,i)=>[xOf(i),yOf(v)]);
+    const botRev=lower.map((v,i)=>[xOf(i),yOf(v)]).reverse();
+    const topPath=smoothPath(topPts),botPath=smoothPath(botRev).replace(/^M/,'L');
+    g+=`<path d="${topPath} ${botPath} Z" fill="${se.color}" opacity="0.82"/>`;
+    g+=`<path d="${topPath}" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>`;
+    for(let i=0;i<n;i++)lower[i]=upper[i];
+  });
+  g+=`<rect class="hit" x="${P.l}" y="${P.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
+  CHARTS[id]={xLabels,series,yfmt,P,iw,W,total:totals};
+  return `<svg id="${id}" viewBox="0 0 ${W} ${H}" class="chart" onmousemove="chartHover(event,'${id}')" onmouseleave="chartLeave()">${g}</svg>`;
+}
+function barChart({cats,values,color,colorsPerBar,yfmt,titles,rotate,W=560,H=270}){
+  const P={l:56,r:14,t:16,b:rotate?76:36},iw=W-P.l-P.r,ih=H-P.t-P.b;
+  const sc=axisScale(0,niceMax(Math.max(...values,0.0001)));
+  const n=values.length,step=iw/n,bw=Math.min(48,step*0.66);
+  const yOf=v=>P.t+ih*(1-(v-sc.lo)/(sc.hi-sc.lo));
+  let g='';
+  sc.ticks.forEach(t=>{const y=yOf(t);g+=`<line class="gl" x1="${P.l}" y1="${y}" x2="${P.l+iw}" y2="${y}"/><text class="ax yax" x="${P.l-8}" y="${y+3}">${yfmt(t)}</text>`;});
+  values.forEach((v,i)=>{
+    const x=P.l+step*i+(step-bw)/2,y=yOf(v),h=P.t+ih-y,col=colorsPerBar?colorsPerBar[i]:(color||'#0d9488');
+    g+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="3" fill="${col}"><title>${esc(cats[i])}: ${titles?titles[i]:yfmt(v)}</title></rect>`;
+    if(n<=14)g+=`<text class="ax vlab" x="${(x+bw/2).toFixed(1)}" y="${(y-4).toFixed(1)}">${titles?titles[i]:yfmt(v)}</text>`;
+    const lx=P.l+step*i+step/2;
+    g+=rotate?`<text class="ax xax" transform="translate(${lx.toFixed(1)},${P.t+ih+11}) rotate(-60)" text-anchor="end">${esc(cats[i])}</text>`
+             :`<text class="ax xax" x="${lx.toFixed(1)}" y="${P.t+ih+15}">${esc(cats[i])}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
+}
+function chartHover(e,id){
+  const c=CHARTS[id];if(!c)return;
+  const svg=document.getElementById(id),rect=svg.getBoundingClientRect();
+  const vx=(e.clientX-rect.left)/rect.width*c.W;
+  let i=Math.round((vx-c.P.l)/c.iw*(c.xLabels.length-1));
+  i=Math.max(0,Math.min(c.xLabels.length-1,i));
+  const tip=document.getElementById('ctip');
+  tip.innerHTML=`<b>${esc(c.xLabels[i]||('#'+(i+1)))}</b>`+c.series.map(s=>
+    `<div><i style="background:${s.color}"></i>${esc(s.name)}: ${c.yfmt(s.points[i])}</div>`).join('')
+    +(c.total?`<div style="border-top:1px solid #4a4f59;margin-top:4px;padding-top:4px">Total: ${c.yfmt(c.total[i])}</div>`:'');
+  tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px';
+}
+function chartLeave(){document.getElementById('ctip').style.display='none';}
+
+function rankedBars(items,{fmt,color='#6f9fd8'}){
+  const max=Math.max(...items.map(i=>i.value),1);
+  return `<div class="rbars">`+items.map(i=>`<div class="rbar">
+    <div class="rbl">${esc(i.label)}</div>
+    <div class="rbtrack"><div class="rbfill" style="width:${(i.value/max*100).toFixed(1)}%;background:${i.color||color}"></div></div>
+    <div class="rbv">${fmt(i.value)}${i.sub?`<span>${esc(i.sub)}</span>`:''}</div></div>`).join('')+`</div>`;
+}
+function pctile(arr,p){if(!arr.length)return 1;const s=[...arr].sort((a,b)=>a-b);return s[Math.min(s.length-1,Math.floor(p*s.length))]||1;}
+function scatterChart({pts,xfmt,yfmt,xlab,ylab,xmax,ymax,W=560,H=300}){
+  const P={l:62,r:16,t:14,b:46},iw=W-P.l-P.r,ih=H-P.t-P.b;
+  const xM=axisScale(0,xmax),yM=axisScale(0,ymax);
+  const xOf=v=>P.l+iw*Math.min(v,xM.hi)/(xM.hi-xM.lo);
+  const yOf=v=>P.t+ih*(1-Math.min(v,yM.hi)/(yM.hi-yM.lo));
+  let g='';
+  yM.ticks.forEach(t=>{const y=yOf(t);g+=`<line class="gl" x1="${P.l}" y1="${y}" x2="${P.l+iw}" y2="${y}"/><text class="ax yax" x="${P.l-8}" y="${y+3}">${yfmt(t)}</text>`;});
+  xM.ticks.forEach(t=>{const x=xOf(t);g+=`<text class="ax xax" x="${x}" y="${P.t+ih+15}">${xfmt(t)}</text>`;});
+  pts.forEach(p=>{g+=`<circle cx="${xOf(p.x).toFixed(1)}" cy="${yOf(p.y).toFixed(1)}" r="4" fill="${p.color}" opacity="0.62"><title>${esc(p.label)}</title></circle>`;});
+  g+=`<text class="ax" x="${P.l+iw/2}" y="${H-6}" text-anchor="middle">${xlab}</text>`;
+  g+=`<text class="ax" transform="translate(13,${P.t+ih/2}) rotate(-90)" text-anchor="middle">${ylab}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
+}
+
+function renderCharts(){
+  const R=recs(),M=DASH.months,host=document.getElementById('charts');
+  if(!R.length){host.innerHTML='<div class="note">No accounts in this filter.</div>';return;}
+  let html='';
+
+  // 1) Monthly GMV by tier
+  const tiers=DTIER?[DTIER]:TIER_ORDER.filter(t=>R.some(r=>r.tier===t));
+  const gmvSeries=tiers.map(t=>({name:TIER_LAB[t],color:TIER_COL[t],
+    points:M.map((_,m)=>R.filter(r=>r.tier===t).reduce((s,r)=>s+r.monthly[m],0))}));
+  html+=`<div class="cardc"><div class="ct">Monthly GMV by tier</div>
+    <div class="cs">Stacked — the top edge is total book GMV each month; bands are transaction modes.</div>
+    ${legend(tiers.map(t=>({name:TIER_LAB[t],color:TIER_COL[t]})))}
+    ${stackedArea('c-gmvtier',{series:gmvSeries,xLabels:M,yfmt:gbpK})}</div>`;
+
+  // 1b) Active accounts per month (retention view)
+  const activeSeries=[{name:'Active accounts',color:'#6f9fd8',
+    points:M.map((_,m)=>R.filter(r=>r.monthly[m]>0).length)}];
+  html+=`<div class="cardc"><div class="ct">Active accounts per month</div>
+    <div class="cs">Accounts with ≥ £1 of GMV that month — a retention/engagement read across the window.</div>
+    ${lineChart('c-active',{series:activeSeries,xLabels:M,yfmt:n=>Math.round(n),area:true})}</div>`;
+
+  // 2) GMV concentration (Pareto), top 40, coloured by tier
+  const sorted=[...R].sort((a,b)=>b.gmv_total-a.gmv_total);
+  const totG=sorted.reduce((s,r)=>s+r.gmv_total,0)||1,topN=Math.min(40,sorted.length);
+  const top=sorted.slice(0,topN);
+  html+=`<div class="cardc"><div class="ct">GMV concentration</div>
+    <div class="cs">Each account's share of ${DTIER?TIER_LAB[DTIER]:'book'} GMV — top ${topN} of ${sorted.length}. Top account = ${pctFmt(top[0].gmv_total/totG*100)}.</div>
+    ${legend(TIER_ORDER.map(t=>({name:TIER_LAB[t],color:TIER_COL[t]})))}
+    ${barChart({cats:top.map(r=>r.account_id),values:top.map(r=>r.gmv_total/totG*100),
+      colorsPerBar:top.map(r=>TIER_COL[r.tier]),yfmt:pctFmt,
+      titles:top.map(r=>pctFmt(r.gmv_total/totG*100)+' · '+gbpK(r.gmv_total)),rotate:true,H:300})}</div>`;
+
+  // 3) GMV distribution by % manual orders (reliance / Lorenz curve)
+  const bins=20,binW=100/bins,shareArr=new Array(bins).fill(0);
+  R.forEach(r=>{let b=Math.min(bins-1,Math.floor(r.manual_pct/binW));shareArr[b]+=r.gmv_total;});
+  const sharePct=shareArr.map(v=>v/totG*100);let run=0;const cum=sharePct.map(v=>run+=v);
+  const xl=shareArr.map((_,i)=>{const e=Math.round(i*binW);return [0,25,50,75].includes(e)?''+e:(i===bins-1?'100':'');});
+  html+=`<div class="cardc full"><div class="ct">GMV distribution by % manual orders</div>
+    <div class="cs">How book revenue concentrates as accounts get more broker-reliant. X = % of an account's orders placed by an AM.</div>
+    ${legend([{name:'% of GMV',color:'#0d9488',line:true},{name:'Cumulative % of GMV',color:'#d9584f',line:true}])}
+    ${lineChart('c-reliance',{series:[
+       {name:'% of GMV',color:'#0d9488',points:sharePct},
+       {name:'Cumulative % of GMV',color:'#d9584f',points:cum}],
+       xLabels:xl,yfmt:pctFmt,dots:false,W:900,H:300})}</div>`;
+
+  // 4) AOV & orders-per-account by bundle share — two stacked panels (one axis each)
+  const bk=[[0,20,'0–20'],[20,50,'20–50'],[50,75,'50–75'],[75,101,'75–100']];
+  const buckets=bk.map(([lo,hi,lab])=>{
+    const inb=R.filter(r=>r.bundle_share>=lo&&r.bundle_share<hi);
+    const forAov=inb.filter(r=>r.orders>=2);
+    const aov=forAov.length?forAov.reduce((s,r)=>s+r.aov,0)/forAov.length:0;
+    const opa=inb.length?inb.reduce((s,r)=>s+r.orders,0)/inb.length:0;
+    return {lab,aov,opa,n:inb.length};});
+  html+=`<div class="cardc"><div class="ct">AOV by % GMV from bundles</div>
+    <div class="cs">Handpick-led buyers (low bundle share) spend more per order. AOV over accounts with ≥2 orders.</div>
+    ${barChart({cats:buckets.map(b=>b.lab),values:buckets.map(b=>Math.round(b.aov)),
+      color:'#6f9fd8',yfmt:gbpK,titles:buckets.map(b=>gbpK(b.aov))})}</div>`;
+  html+=`<div class="cardc"><div class="ct">Orders per account by % GMV from bundles</div>
+    <div class="cs">Frequency across the same buckets (all accounts in bucket). n per bucket in tooltip.</div>
+    ${barChart({cats:buckets.map(b=>b.lab),values:buckets.map(b=>Math.round(b.opa*10)/10),
+      color:'#57a07f',yfmt:n=>n.toFixed(1),titles:buckets.map(b=>b.opa.toFixed(1)+' · n='+b.n)})}</div>`;
+
+  host.innerHTML=html;
+}
+
+/* ---------- segments & geography ---------- */
+function groupSum(R,keyFn){const m={};R.forEach(r=>{const k=keyFn(r)||'Unknown';
+  (m[k]=m[k]||{gmv:0,n:0,orders:0});m[k].gmv+=r.gmv_total;m[k].n++;m[k].orders+=r.orders;});return m;}
+function renderBreakdowns(){
+  const R=recs(),host=document.getElementById('segCharts');
+  if(!R.length){host.innerHTML='';return;}
+  const rg=groupSum(R,r=>r.region);
+  const regItems=Object.entries(rg).map(([k,v])=>({label:k,value:v.gmv,sub:'n='+v.n}))
+    .sort((a,b)=>b.value-a.value).slice(0,8);
+  const pg=groupSum(R,r=>r.persona);
+  const perItems=Object.entries(pg).map(([k,v])=>({label:k,value:v.gmv,
+    sub:'AOV '+gbpK(v.orders?v.gmv/v.orders:0)+' · n='+v.n})).sort((a,b)=>b.value-a.value);
+  const tb=[[0,3,'0–3 mo'],[3,6,'3–6 mo'],[6,12,'6–12 mo'],[12,24,'12–24 mo'],[24,1e9,'24+ mo']];
+  const tenItems=tb.map(([lo,hi,lab])=>{const inb=R.filter(r=>r.tenure>=lo&&r.tenure<hi);
+    const gmv=inb.reduce((s,r)=>s+r.gmv_total,0);
+    const act=inb.length?inb.filter(r=>r.monthly[DMONTH]>0).length/inb.length*100:0;
+    return {label:lab,value:gmv,sub:'n='+inb.length+' · act '+Math.round(act)+'%'};});
+  host.innerHTML=
+    `<div class="cardc"><div class="ct">GMV by region</div><div class="cs">Top regions by 6-mo GMV; account count in label.</div>${rankedBars(regItems,{fmt:gbpK})}</div>`+
+    `<div class="cardc"><div class="ct">Buyer persona</div><div class="cs">6-mo GMV and blended AOV by persona.</div>${rankedBars(perItems,{fmt:gbpK,color:'#6d28d9'})}</div>`+
+    `<div class="cardc"><div class="ct">Tenure cohorts</div><div class="cs">6-mo GMV by months-on-platform; “act” = % active in ${DASH.months[DMONTH]} (onboarding read).</div>${rankedBars(tenItems,{fmt:gbpK,color:'#57a07f'})}</div>`;
+}
+
+/* ---------- largest movers ---------- */
+function renderMovers(){
+  const R=recs(),mm=Math.max(1,DMONTH),cur=DASH.months[mm],prev=DASH.months[mm-1];
+  document.getElementById('moversMeta').textContent=`— ${prev} → ${cur}, largest |Δ GMV| · ${DTIER?TIER_LAB[DTIER]:'all tiers'}`;
+  const rows=R.map(r=>({r,d:r.monthly[mm]-r.monthly[mm-1],p:r.monthly[mm-1],c:r.monthly[mm]}))
+    .sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,10);
+  const host=document.getElementById('movers');
+  if(!rows.length){host.innerHTML='<div class="note">No accounts in this filter.</div>';return;}
+  host.innerHTML=`<table class="dtbl"><thead><tr><th>Account</th><th>Tier</th>
+    <th class="n">${prev}</th><th class="n">${cur}</th><th class="n">Δ GMV</th></tr></thead><tbody>`+
+    rows.map(x=>`<tr><td>${x.r.account_id}</td>
+      <td><span class="pill" style="background:${TIER_COL[x.r.tier]}">${TIER_LAB[x.r.tier]}</span></td>
+      <td class="n">${gbpK(x.p)}</td><td class="n">${gbpK(x.c)}</td>
+      <td class="n ${x.d>0?'up':x.d<0?'dn':''}">${x.d>0?'↑ ':x.d<0?'↓ ':''}${gbpK(Math.abs(x.d))}</td></tr>`).join('')
+    +`</tbody></table>`;
+}
+
+/* ---------- momentum leaderboard ---------- */
+function renderMomentum(){
+  const R=recs().filter(r=>r.momentum!=null&&r.gmv_total>=1000&&r.orders>=2);
+  const host=document.getElementById('momentum');
+  const byMo=[...R].sort((a,b)=>b.momentum-a.momentum);
+  const grow=byMo.slice(0,5),decl=[...byMo].reverse().filter(r=>r.momentum<0).slice(0,5);
+  const tbl=arr=>`<table class="dtbl"><thead><tr><th>Account</th><th>Tier</th>
+    <th class="n">GMV 6-mo</th><th class="n">Momentum</th></tr></thead><tbody>`+
+    (arr.length?arr.map(r=>`<tr><td>${r.account_id}</td>
+      <td><span class="pill" style="background:${TIER_COL[r.tier]}">${TIER_LAB[r.tier]}</span></td>
+      <td class="n">${gbpK(r.gmv_total)}</td>
+      <td class="n ${r.momentum>0?'up':'dn'}">${signPct(r.momentum)}</td></tr>`).join('')
+     :`<tr><td colspan="4" style="color:var(--d-label)">none in this filter</td></tr>`)+`</tbody></table>`;
+  host.innerHTML=`<div class="lboards">
+    <div><div class="sec" style="margin:0 0 8px">▲ Fastest growing</div>${tbl(grow)}</div>
+    <div><div class="sec" style="margin:0 0 8px">▼ Fastest declining</div>${tbl(decl)}</div></div>`;
+}
+
+/* ---------- engagement scatter + data quality ---------- */
+function renderEngDQ(){
+  const R=recs(),host=document.getElementById('engdq');
+  if(!R.length){host.innerHTML='';return;}
+  const xmax=pctile(R.map(r=>r.pdp_views),0.95),ymax=pctile(R.map(r=>r.gmv_total),0.95);
+  const pts=R.map(r=>({x:r.pdp_views,y:r.gmv_total,color:TIER_COL[r.tier],
+    label:`${r.account_id} · PDP ${r.pdp_views} · chat ${r.chat} · ${gbpK(r.gmv_total)}`}));
+  const scatter=`<div class="cardc"><div class="ct">Engagement vs GMV</div>
+    <div class="cs">PDP views (6-mo) against GMV, colored by tier. Axes clipped at the 95th percentile; hover a point.</div>
+    ${legend(TIER_ORDER.map(t=>({name:TIER_LAB[t],color:TIER_COL[t]})))}
+    ${scatterChart({pts,xfmt:n=>Math.round(n),yfmt:gbpK,xlab:'PDP views (6-mo)',ylab:'GMV (6-mo)',xmax,ymax})}</div>`;
+  const flags={reliance_mismatch_recomputed:0,gmv_total_mismatch:0,status_missing:0,status_duplicate:0,duplicate_account_id:0};
+  let clean=0;R.forEach(r=>{const f=r.data_flags||[];if(!f.length)clean++;f.forEach(x=>{if(x in flags)flags[x]++;});});
+  const lab={reliance_mismatch_recomputed:'Reliance recomputed',gmv_total_mismatch:'GMV total mismatch',
+    status_missing:'Status missing',status_duplicate:'Marked duplicate',duplicate_account_id:'Duplicate account id'};
+  const tiles=[`<div class="dqtile ok"><div class="n">${clean}</div><div class="l">Clean (no flags)</div></div>`]
+    .concat(Object.entries(flags).map(([k,v])=>`<div class="dqtile"><div class="n">${v}</div><div class="l">${lab[k]}</div></div>`));
+  const dq=`<div class="cardc"><div class="ct">Data quality</div>
+    <div class="cs">Cleaning flags raised at ingest, across ${R.length} account(s) in the current filter.</div>
+    <div class="dqgrid">${tiles.join('')}</div></div>`;
+  host.innerHTML=scatter+dq;
+}
+
+/* ---------- deep dive ---------- */
+function metricSeries(a,key,book){
+  const M=DASH.months,N=book.length||1;
+  const bookMonthly=M.map((_,m)=>book.reduce((s,r)=>s+r.monthly[m],0));
+  const avgMonthly=bookMonthly.map(v=>v/N);
+  const cum=arr=>{let r=0;return arr.map(v=>r+=v);};
+  const mom=arr=>arr.map((v,i)=>i===0?0:(arr[i-1]>0?(v-arr[i-1])/arr[i-1]*100:0));
+  if(key==='gmv')  return {acc:a.monthly,           avg:avgMonthly};
+  if(key==='cum')  return {acc:cum(a.monthly),      avg:cum(avgMonthly)};
+  if(key==='mom')  return {acc:mom(a.monthly),      avg:mom(avgMonthly)};
+  if(key==='share')return {acc:a.monthly.map((v,m)=>bookMonthly[m]>0?v/bookMonthly[m]*100:0),
+                           avg:M.map(()=>100/N)};
+}
+function renderDeepDive(){
+  const a=sheetRecs().find(r=>r.account_id===DACC);
+  const stats=document.getElementById('ddStats'),host=document.getElementById('ddCharts');
+  if(!a){stats.innerHTML='';host.innerHTML='<div class="note">No account selected.</div>';return;}
+  const kv=[['Tier',TIER_LAB[a.tier]],['Ownership',a.ownership],['Persona',a.persona||'—'],
+    ['Region',a.region||'—'],['Tenure',a.tenure+' mo'],['GMV 6-mo',gbpK(a.gmv_total)],
+    ['Orders 6-mo',a.orders],['AOV',gbpK(a.aov)],['Manual orders %',pctFmt(a.manual_pct)],
+    ['Bundle GMV %',pctFmt(a.bundle_share)],
+    ['% bundle orders',pctFmt(a.orders?a.bundle_orders/a.orders*100:0)],
+    ['Active months',a.active_months+'/6'],
+    ['App-active days',a.app_active_days],['PDP views',a.pdp_views],['Offers',a.offers],
+    ['Chat threads',a.chat],['Video calls',a.video]];
+  stats.innerHTML=kv.map(([k,v])=>`<div class="k">${k}</div><div class="v">${esc(v)}</div>`).join('');
+  if(!DMETRICS.length){host.innerHTML='<div class="note">Tick one or more metrics to plot ' + DACC + ' over the six-month window.</div>';return;}
+  const book=sheetRecs();
+  host.innerHTML=DMETRICS.map(key=>{
+    const m=MET[key],s=metricSeries(a,key,book),id='dd-'+key;
+    return `<div class="cardc"><div class="ct">${m.label}</div>
+      <div class="cs">${a.account_id} vs portfolio average (${book.length} accounts, all tiers).</div>
+      ${legend([{name:a.account_id,color:m.color,line:true},{name:'Portfolio avg',color:m.color,line:true,dash:true}])}
+      ${lineChart(id,{series:[
+        {name:a.account_id,color:m.color,points:s.acc},
+        {name:'Portfolio avg',color:m.color,dash:true,points:s.avg}],
+        xLabels:DASH.months,yfmt:m.fmt,neg:m.neg,W:760,H:250})}</div>`;
+  }).join('')
+   +`<div class="note">The workbook's only monthly series is GMV, so all four trend metrics are GMV-derived. Everything else (orders, AOV, PDP views, chat, …) is a 6-month total and shown in the stats panel on the left, not as a time series.</div>`;
+}
+
 load();
 </script>
 </body></html>
