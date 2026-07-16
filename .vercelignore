@@ -1,0 +1,14 @@
+# Vercel bundles only what the function needs. Keep local-only cruft out.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.remember/
+tests/
+cli.py
+*.csv
+
+# Fleek's case-study data and the local state DB never leave the machine.
+data/raw/*
+!data/raw/.gitkeep
+data/state.db*

@@ -70,6 +70,8 @@
   <span class="sp"></span>
   <span id="llmstatus" class="wb"></span>
   <label class="tog"><input type="checkbox" id="llm"> use LLM drafts</label>
+  <input type="file" id="file" accept=".xlsx,.xls" style="display:none" onchange="upload()">
+  <button onclick="document.getElementById('file').click()">Upload .xlsx</button>
   <button onclick="run('Accounts')">Run · Accounts</button>
   <button onclick="run('new_accounts')">Run · new_accounts</button>
   <a href="/api/queue.csv"><button>Download CSV</button></a>
@@ -92,7 +94,7 @@
     <th class="n" onclick="sortBy('gmv_at_stake')">Prize</th>
     <th>Why</th>
   </tr></thead><tbody id="rows"></tbody></table>
-  <div class="empty" id="empty" style="display:none">No run yet — hit <b>Run · Accounts</b> above.</div>
+  <div class="empty" id="empty" style="display:none"></div>
 </div>
 
 <div id="ov" onclick="closeDrawer()"></div>
@@ -140,7 +142,11 @@ function render(){
   let rows=(STATE.queue||[]).filter(r=>(!pf||r.play===pf)&&
     (!q||(r.account_id+' '+(r.reason||'')).toLowerCase().includes(q)));
   rows.sort((a,b)=>{const x=a[SORT],y=b[SORT];return (x>y?1:x<y?-1:0)*DIR;});
-  document.getElementById('empty').style.display=(STATE.queue||[]).length?'none':'block';
+  const emptyEl=document.getElementById('empty');
+  emptyEl.style.display=(STATE.queue||[]).length?'none':'block';
+  emptyEl.innerHTML=STATE.workbook
+    ? 'No run yet — hit <b>Run · Accounts</b> above.'
+    : 'No workbook yet — hit <b>Upload .xlsx</b> above to begin.';
   document.getElementById('count').textContent=rows.length+' shown';
   document.getElementById('rows').innerHTML=rows.map(r=>`<tr onclick="open_('${r.account_id}')">
     <td class="n">${r.account_id}</td>
@@ -179,6 +185,16 @@ async function open_(aid){
 }
 function closeDrawer(){document.getElementById('ov').classList.remove('open');document.getElementById('drawer').classList.remove('open');}
 
+async function upload(){
+  const inp=document.getElementById('file'); const f=inp.files[0]; if(!f)return;
+  const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
+  toast('Uploading '+f.name+'…');
+  const fd=new FormData(); fd.append('file',f);
+  const r=await (await fetch('/api/upload',{method:'POST',body:fd})).json();
+  inp.value=''; btns.forEach(b=>b.disabled=false);
+  if(r.error){toast('Error: '+r.error);return;}
+  toast('Uploaded '+r.workbook+' — hit Run'); await load();
+}
 async function run(sheet){
   const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
   toast('Running '+sheet+'…');

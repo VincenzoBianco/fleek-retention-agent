@@ -7,13 +7,28 @@ and the interview conversation about "why 50%?" has a single place to point at.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 PLAYS_DIR = DATA_DIR / "plays"
-STATE_DB = DATA_DIR / "state.db"
+
+# Writable storage. Locally we persist under data/ (shared with the CLI). On a
+# serverless host the project filesystem is read-only except /tmp, so both the
+# state DB and any uploaded workbook go there — ephemeral (a cold start wipes it,
+# which is fine for a demo/single session). Override either path with an env var;
+# to make the book durable later, point RETENTION_DB at a hosted DB URL and swap
+# the store backend — nothing else here changes.
+_ON_SERVERLESS = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+_WRITABLE_DIR = Path("/tmp") if _ON_SERVERLESS else DATA_DIR
+
+STATE_DB = Path(os.environ.get("RETENTION_DB") or (_WRITABLE_DIR / "state.db"))
+# Where uploaded workbooks land. Locally that's data/raw (so the app and CLI see
+# the same files); on serverless it's /tmp/uploads (the only writable place).
+UPLOAD_DIR = Path(os.environ.get("RETENTION_UPLOAD_DIR")
+                  or (_WRITABLE_DIR / "uploads" if _ON_SERVERLESS else RAW_DIR))
 
 # Monthly GMV columns, in calendar order. The window is Sep 2025 -> Feb 2026.
 MONTH_COLS = ["gmv_sep", "gmv_oct", "gmv_nov", "gmv_dec", "gmv_jan", "gmv_feb"]
