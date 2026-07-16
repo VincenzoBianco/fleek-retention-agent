@@ -290,12 +290,65 @@
   .pcancel:hover{background:#e7ecf2;}
   @media(max-width:720px){.ddwrap{grid-template-columns:1fr;}.lboards{grid-template-columns:1fr;}.rbar{grid-template-columns:90px 1fr auto;}
     .pcards{grid-template-columns:1fr;}}
+  /* ---- home / overview tab ---- */
+  #view-home{background:var(--d-bg);}
+  .hhero{background:linear-gradient(135deg,#171a19,#2a2f27);border-radius:16px;padding:32px 34px;color:#eef0ea;box-shadow:var(--shadow);}
+  .hhero .heyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#4ade80;margin-bottom:12px;}
+  .hhero h2{font-size:25px;margin:0 0 13px;font-weight:700;letter-spacing:-.02em;line-height:1.25;max-width:820px;}
+  .hhero p{font-size:14px;line-height:1.65;color:#c5c9c0;max-width:760px;margin:0;}
+  /* portfolio analysis */
+  .pstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:14px;}
+  .pstat{background:var(--d-card);border-radius:13px;padding:16px 18px;box-shadow:var(--shadow);}
+  .pstat b{display:block;font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--d-value);line-height:1;}
+  .pstat span{display:block;font-size:12px;color:#5b6472;line-height:1.5;margin-top:8px;}
+  .pstat.c1 b{color:var(--serve);} .pstat.c2 b{color:var(--key);} .pstat.c3 b{color:#c2610c;} .pstat.c4 b{color:var(--risk);}
+  .tlead{font-size:12px;color:var(--d-label);margin:14px 0 10px;}
+  .tstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .tcard{background:var(--d-card);border-radius:12px;padding:13px 16px;box-shadow:var(--shadow);border-top:3px solid var(--d-blue);}
+  .tcard .tn{font-size:13px;font-weight:700;color:var(--d-value);}
+  .tcard .td{font-family:var(--mono);font-size:11px;color:var(--d-label);margin-top:3px;}
+  .tcard .tf{font-size:11.5px;color:#5b6472;margin-top:8px;line-height:1.45;}
+  .tcard.tself{border-top-color:#0d9488;} .tcard.thyb{border-top-color:#6d28d9;} .tcard.tman{border-top-color:#c2610c;}
+  /* tool-overview diagram */
+  .dgm{display:flex;gap:18px;align-items:stretch;background:var(--d-card);border-radius:13px;padding:22px;box-shadow:var(--shadow);}
+  .dgm-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--d-label);margin-bottom:10px;}
+  .dgm-col{display:flex;flex-direction:column;gap:9px;width:216px;flex-shrink:0;}
+  .inst{background:#f1f4f8;border:1px solid #e3e9f1;border-radius:9px;padding:9px 12px;}
+  .inst b{font-family:var(--mono);font-size:12.5px;color:var(--d-value);font-weight:700;}
+  .inst span{display:block;font-family:var(--mono);font-size:10.5px;color:var(--d-label);margin-top:2px;}
+  .inst.skills{background:#f3f0fb;border-color:#e0d9f5;}
+  .dgm-arrows{display:flex;flex-direction:column;justify-content:center;gap:24px;color:#c4cad2;font-size:18px;flex-shrink:0;}
+  .dgm-right{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+  .shell{border:1.5px dashed #9ec9b3;border-radius:11px;padding:24px 16px 16px;position:relative;background:#fbfdfc;}
+  .shell-lbl{position:absolute;top:-8px;left:14px;background:#fbfdfc;padding:0 8px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--serve);}
+  .agentbox{background:#fdf1e3;border:1px solid #eccfa6;border-radius:10px;padding:20px 16px;text-align:center;}
+  .agentbox b{font-size:16px;color:var(--managed);font-weight:700;}
+  .agentbox span{display:block;font-family:var(--mono);font-size:12px;color:#8a6a2f;margin-top:6px;}
+  .guards{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px;}
+  .guards span{font-family:var(--mono);font-size:11px;background:#e7f6ef;color:#0f766e;border-radius:7px;padding:5px 10px;}
+  .decision{background:#e7f6ef;border:1px solid #bfe3d2;border-radius:10px;padding:13px 16px;margin-top:12px;}
+  .decision b{font-size:13.5px;color:var(--d-value);font-weight:700;}
+  .decision span{display:block;font-family:var(--mono);font-size:12px;color:#3d6b57;margin-top:5px;}
+  .dgm-cap{font-size:12.5px;color:var(--ink2);line-height:1.6;margin:14px 0 0;max-width:900px;}
+  .dgm-cap code{font-family:var(--mono);font-size:11.5px;background:#f2f5f9;padding:1px 5px;border-radius:4px;color:#5b46c9;}
+  /* improvements */
+  .improve{display:flex;flex-direction:column;gap:10px;}
+  .irow{display:flex;gap:14px;background:var(--d-card);border-radius:12px;padding:15px 18px;box-shadow:var(--shadow);border-left:3px solid var(--brand);}
+  .irow .num{font-family:var(--mono);font-size:15px;font-weight:700;color:#c4cad2;flex-shrink:0;line-height:1.5;}
+  .irow .ic{flex:1;} .irow .ict{font-size:13px;font-weight:700;color:var(--d-value);margin-bottom:4px;}
+  .irow .ic p{font-size:12.5px;color:var(--ink2);line-height:1.55;margin:0;}
+  .irow .ic p b{color:var(--d-value);}
+  .hfoot{text-align:center;color:var(--d-label);font-size:12px;padding:26px 0 6px;}
+  .hfoot b{color:var(--brand);cursor:pointer;} .hfoot b:hover{text-decoration:underline;}
+  @media(max-width:720px){.dgm{flex-direction:column;}.dgm-col{width:auto;}
+    .dgm-arrows{flex-direction:row;justify-content:center;}.tstrip{grid-template-columns:1fr;}}
 </style></head>
 <body>
 <header>
   <h1>Fleek Retention Agent</h1>
   <div class="tabs">
-    <button class="tab active" data-t="queue" onclick="showTab('queue')">Action Queue</button>
+    <button class="tab active" data-t="home" onclick="showTab('home')">Overview</button>
+    <button class="tab" data-t="queue" onclick="showTab('queue')">Action Queue</button>
     <button class="tab" data-t="dashboard" onclick="showTab('dashboard')">Dashboard</button>
     <button class="tab" data-t="plays" onclick="showTab('plays')">Plays</button>
   </div>
@@ -310,7 +363,66 @@
   <button onclick="reset()">Reset</button>
 </header>
 
-<div class="wrap" id="view-queue">
+<div class="wrap" id="view-home">
+  <div class="hhero">
+    <div class="heyebrow">Fleek · GTM–Retention</div>
+    <h2>An agent that optimizes the next best action to grow accounts across tiers.</h2>
+    <p>It reads each account by behaviour — not its ownership label — chooses one play, sizes the expected value, and drafts the outreach for an AM to send.</p>
+  </div>
+
+  <h3 class="sec">Portfolio analysis <span class="muted">— what the data said</span></h3>
+  <div class="pstats">
+    <div class="pstat c1"><b>~20%</b><span>of GMV is <b>effectively self-serve</b> — the rest is placed by a person, so migration is the core scalability lever.</span></div>
+    <div class="pstat c2"><b>51%</b><span>of GMV sits in the <b>top 10 accounts</b> (ACC-001 alone is 20%). Accounts ≥10% of GMV are excluded from automation.</span></div>
+    <div class="pstat c3"><b>63</b><span><b>new accounts</b> (&lt;5 months) stall after ~1 order — an onboarding gap the AM reaches ~12 months too late.</span></div>
+    <div class="pstat c4"><b>£120k</b><span>of forward GMV is <b>at risk</b> in a few genuinely churning accounts — rare but concentrated in high-value ones.</span></div>
+  </div>
+  <div class="tlead">Segmented by how orders are actually placed (not by ownership label):</div>
+  <div class="tstrip">
+    <div class="tcard tself"><div class="tn">Self-serve</div><div class="td">&lt;25% manual orders</div><div class="tf">Already buys for itself — grow spend, keep it self-serving.</div></div>
+    <div class="tcard thyb"><div class="tn">Hybrid — the prize</div><div class="td">25–75% manual orders</div><div class="tf">~70% of GMV and the highest AOV (£1,002). Proven product users — the lowest-friction migration target.</div></div>
+    <div class="tcard tman"><div class="tn">Manual</div><div class="td">&gt;75% manual orders</div><div class="tf">Runs on the AM. Needs a guided, shadowed handover — the largest never auto-nudged.</div></div>
+  </div>
+
+  <h3 class="sec">Tool overview <span class="muted">— one decision loop per new or changed account</span></h3>
+  <div class="dgm">
+    <div class="dgm-col">
+      <div class="dgm-lbl">Instruments (read-only)</div>
+      <div class="inst"><b>account_signals</b><span>reliance · tier · activity</span></div>
+      <div class="inst"><b>trend_signals</b><span>CAGR · activity ratio</span></div>
+      <div class="inst"><b>expected_value</b><span>£ per candidate play</span></div>
+      <div class="inst"><b>peer_benchmarks</b><span>vs tier medians</span></div>
+      <div class="inst"><b>portfolio_context</b><span>strategy + portfolio stats</span></div>
+      <div class="inst skills"><b>skills (system prompt)</b><span>analyst_guide · portfolio · plays</span></div>
+    </div>
+    <div class="dgm-arrows"><span>→</span><span>→</span><span>→</span></div>
+    <div class="dgm-right">
+      <div class="dgm-lbl">Decide &amp; guard</div>
+      <div class="shell">
+        <div class="shell-lbl">Deterministic shell</div>
+        <div class="agentbox"><b>account-analyst agent</b><span>tool-use loop → submit_decision</span></div>
+        <div class="guards">
+          <span>£ sized by ev.py</span>
+          <span>key account → blocked</span>
+          <span>holdout enforced</span>
+          <span>error → fallback</span>
+        </div>
+      </div>
+      <div class="decision"><b>Decision</b><span>segment · play · feature · £ EV · reason · decided_by</span></div>
+    </div>
+  </div>
+  <p class="dgm-cap">The agent reads the signals and the written strategy, then picks the categorical decision — one play per account. The <b>deterministic shell</b> around it computes every £ figure (one source of truth), refuses to queue a key account (≥10% of portfolio GMV), keeps the control group intact, and drops to the pre-agent engine on any failure — so a run always produces a full, tested result even with the model off. <code>decided_by</code> records which path ran, so you can measure how often the agent departs from the deterministic baseline. Re-run the same file and nothing changes; only new or changed accounts are touched.</p>
+
+  <h3 class="sec">How I'd improve it <span class="muted">— what I'd build next</span></h3>
+  <div class="improve">
+    <div class="irow"><div class="num">1</div><div class="ic"><div class="ict">Give the agent real in-app actions, delivered over WhatsApp</div><p>Today it recommends and drafts. Next I'd let it <b>act</b> — pre-fill a cart, offer a targeted promo, spin up an item-specific landing page — and deliver those over WhatsApp where these buyers already are. Turning a recommendation into a one-tap action is the game-changer for actually shifting hybrid users' behaviour onto self-serve.</p></div></div>
+    <div class="irow"><div class="num">2</div><div class="ic"><div class="ict">Earn full delegation with evals and monitoring</div><p>To make this safe at scale, I'd add a broader <b>eval suite</b> and <b>monitor the agent's behaviour</b> in production before handing it the wheel — so scaling from decision-support to autonomous action is a measured step, not a leap.</p></div></div>
+  </div>
+
+  <div class="hfoot">Head to the <b onclick="showTab('queue')">Action Queue</b> to see the decisions, the <b onclick="showTab('dashboard')">Dashboard</b> to explore the portfolio, or <b onclick="showTab('plays')">Plays</b> to read &amp; edit the strategy the agent reasons over.</div>
+</div>
+
+<div class="wrap" id="view-queue" style="display:none">
   <div id="banners"></div>
   <div class="chips" id="chips"></div>
   <div class="toolbar">
@@ -706,6 +818,7 @@ const MET={
 };
 
 async function showTab(t){
+  document.getElementById('view-home').style.display=t==='home'?'':'none';
   document.getElementById('view-queue').style.display=t==='queue'?'':'none';
   document.getElementById('view-dashboard').style.display=t==='dashboard'?'':'none';
   document.getElementById('view-plays').style.display=t==='plays'?'':'none';
