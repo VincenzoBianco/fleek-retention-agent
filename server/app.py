@@ -84,6 +84,7 @@ def do_run(payload: dict = Body(default={})):
     try:
         import os
         report = run_loop(wb, sheet, s, use_llm=bool(payload.get("llm")),
+                          use_agent=payload.get("agent", True),
                           source_ts=os.path.getmtime(wb))
         return report.model_dump()
     finally:

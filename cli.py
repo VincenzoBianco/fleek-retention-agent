@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fleek Retention Agent — command line.
 
-    python cli.py run    <workbook.xlsx> [--sheet Accounts] [--llm] [--export queue.csv]
+    python cli.py run    <workbook.xlsx> [--sheet Accounts] [--llm] [--no-agent] [--export queue.csv]
     python cli.py status
     python cli.py reset
 
@@ -28,7 +28,8 @@ def _run(args):
     # Default the source timestamp to the workbook's mtime so newer files win on
     # a re-run without the user having to think about it (--source-ts overrides).
     ts = args.source_ts if args.source_ts else Path(args.workbook).stat().st_mtime
-    report = run_loop(args.workbook, args.sheet, store, use_llm=args.llm, source_ts=ts)
+    report = run_loop(args.workbook, args.sheet, store, use_llm=args.llm,
+                      use_agent=args.agent, source_ts=ts)
     print(f"Run #{report.run_id}  ({report.source})")
     c = report.gmv_concentration
     if c:
@@ -39,6 +40,11 @@ def _run(args):
               f"(£{k['gmv_total']:,.0f}) — human-owned, monitor personally")
     print(f"  seen={report.n_seen}  new={report.n_new}  changed={report.n_changed}  "
           f"unchanged/skipped={report.n_unchanged_skipped}  stale/skipped={report.n_stale_skipped}")
+    decided = report.n_new + report.n_changed
+    engine = (f"agent decided {report.n_agent_decided}/{decided}"
+              if report.n_agent_decided else
+              (f"deterministic ({decided} decided)" if decided else "nothing new to decide"))
+    print(f"  engine: {engine}")
     print(f"  actions queued={report.n_actions}  holdout(control)={report.n_holdout}  "
           f"expected value (risk-adj)=£{report.expected_value_total:,.0f}")
     if report.learned_priors:
@@ -114,6 +120,11 @@ def main(argv=None):
     r.add_argument("workbook")
     r.add_argument("--sheet", default="Accounts")
     r.add_argument("--llm", action="store_true", help="use Claude to draft (needs ANTHROPIC_API_KEY)")
+    r.add_argument("--agent", dest="agent", action="store_true", default=True,
+                   help="use the account-analyst agent to decide (default; needs ANTHROPIC_API_KEY, "
+                        "falls back to deterministic without one)")
+    r.add_argument("--no-agent", dest="agent", action="store_false",
+                   help="force the deterministic engine (no LLM decisions)")
     r.add_argument("--export", default="", help="optional: write the action queue to this CSV path")
     r.add_argument("--source-ts", type=float, default=0.0, dest="source_ts",
                    help="source recency (epoch); newer wins on re-run. Defaults to file mtime.")

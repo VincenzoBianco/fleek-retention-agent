@@ -46,6 +46,7 @@ class Store:
                 priority     REAL, gmv_at_stake REAL,
                 expected_value REAL, prize_type TEXT,
                 draft        TEXT, used_llm INTEGER DEFAULT 0,
+                decided_by   TEXT DEFAULT 'deterministic', agent_rationale TEXT,
                 holdout      INTEGER DEFAULT 0, source_ts REAL DEFAULT 0,
                 first_seen_run INTEGER, last_seen_run INTEGER, decided_run INTEGER
             );
@@ -71,6 +72,10 @@ class Store:
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(accounts)")}
         if "transaction_mode" not in cols:
             self.db.execute("ALTER TABLE accounts ADD COLUMN transaction_mode TEXT")
+        if "decided_by" not in cols:
+            self.db.execute("ALTER TABLE accounts ADD COLUMN decided_by TEXT DEFAULT 'deterministic'")
+        if "agent_rationale" not in cols:
+            self.db.execute("ALTER TABLE accounts ADD COLUMN agent_rationale TEXT")
         self.db.commit()
 
     # --- run lifecycle ---
@@ -120,21 +125,24 @@ class Store:
             INSERT INTO accounts (account_id, fingerprint, ownership, region, persona,
                 transaction_mode, gmv_total, segment, health, play, feature, channel, action, reason,
                 priority, gmv_at_stake, expected_value, prize_type, draft, used_llm,
+                decided_by, agent_rationale,
                 holdout, source_ts, first_seen_run, last_seen_run, decided_run)
             VALUES (:aid, :fp, :own, :reg, :per, :tmode, :gmv, :seg, :hea, :play, :feat, :chan,
-                :act, :rea, :pri, :stake, :ev, :ptype, :draft, :llm, :hold, :ts, :run, :run, :run)
+                :act, :rea, :pri, :stake, :ev, :ptype, :draft, :llm, :dby, :arat, :hold, :ts, :run, :run, :run)
             ON CONFLICT(account_id) DO UPDATE SET
                 fingerprint=:fp, ownership=:own, region=:reg, persona=:per, transaction_mode=:tmode,
                 gmv_total=:gmv, segment=:seg, health=:hea, play=:play, feature=:feat, channel=:chan,
                 action=:act, reason=:rea, priority=:pri, gmv_at_stake=:stake,
                 expected_value=:ev, prize_type=:ptype, draft=:draft, used_llm=:llm,
+                decided_by=:dby, agent_rationale=:arat,
                 holdout=:hold, source_ts=:ts, last_seen_run=:run, decided_run=:run
             """,
             dict(aid=a.account_id, fp=a.fingerprint, own=a.ownership, reg=a.region,
                  per=a.buyer_persona, tmode=a.transaction_mode, gmv=a.gmv_total_6m, seg=d.segment, hea=d.health,
                  play=d.play, feat=d.feature, chan=d.channel, act=d.action, rea=d.reason,
                  pri=d.priority, stake=d.gmv_at_stake, ev=d.expected_value, ptype=d.prize_type,
-                 draft=draft, llm=int(used_llm), hold=int(d.holdout), ts=source_ts, run=run_id),
+                 draft=draft, llm=int(used_llm), dby=d.decided_by, arat=d.agent_rationale,
+                 hold=int(d.holdout), ts=source_ts, run=run_id),
         )
 
     def touch_seen(self, account_ids: list[str], run_id: int):

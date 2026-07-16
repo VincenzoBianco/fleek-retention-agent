@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import learning
+from .agent import Analyst
 from .draft import make_draft
 from .ingest import load_accounts
 from .llm import LLM
@@ -22,7 +23,8 @@ from .store import Store
 
 
 def run(source_path: str | Path, sheet: str, store: Store,
-        use_llm: bool = False, workers: int = 8, source_ts: float = 0.0) -> RunReport:
+        use_llm: bool = False, use_agent: bool = True, workers: int = 8,
+        source_ts: float = 0.0) -> RunReport:
     accounts = load_accounts(source_path, sheet)
     run_id = store.start_run(f"{Path(source_path).name}:{sheet}")
 
@@ -34,7 +36,18 @@ def run(source_path: str | Path, sheet: str, store: Store,
     split = store.diff(accounts, source_ts=source_ts)
     to_decide = split["new"] + split["changed"]
 
-    decisions = {a.account_id: decide(a, classify(a)) for a in to_decide}
+    # Decide each new/changed account. When the agent is on (and a key is present)
+    # the account-analyst reasons over the tools; otherwise — and per-account on any
+    # failure — it falls back to the deterministic engine. The agent call is the
+    # expensive step, so fan it out across the worker pool. Portfolio/peer tools see
+    # the whole loaded book, not just the decided slice.
+    analyst = Analyst() if use_agent else None
+    if analyst is not None and analyst.enabled and to_decide:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            decided = ex.map(lambda a: (a.account_id, analyst.evaluate(a, accounts)), to_decide)
+            decisions = dict(decided)
+    else:
+        decisions = {a.account_id: decide(a, classify(a)) for a in to_decide}
 
     # Draft only accounts that have a play AND aren't in the control group.
     # Heuristics are instant; with the LLM on we fan the calls out across a
@@ -76,6 +89,7 @@ def run(source_path: str | Path, sheet: str, store: Store,
         n_unchanged_skipped=len(split["unchanged"]),
         n_stale_skipped=len(split["stale"]),
         n_actions=len(queue),
+        n_agent_decided=sum(1 for d in decisions.values() if d.decided_by == "agent"),
         n_holdout=store.holdout_count(),
         segment_counts=store.segment_counts(),
         play_counts=store.play_counts(),

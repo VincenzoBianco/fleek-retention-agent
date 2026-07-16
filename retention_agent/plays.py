@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from . import config
+from . import config, ev
 from .models import Account, Decision
 from .segment import SegmentResult
 
@@ -101,11 +101,8 @@ def _decide(a: Account, seg: SegmentResult) -> Decision:
     #    ordering £1.8k/mo hasn't got its whole £18k window "at risk"). Capped at
     #    what they actually spent in the window. EV discounts by the win-back rate.
     if material and seg.health in ("dormant", "declining"):
-        prior_monthly = sum(a.monthly_gmv[:3]) / 3
-        recent_monthly = sum(a.monthly_gmv[-3:]) / 3
-        lost_monthly = max(0.0, prior_monthly - recent_monthly)
-        at_risk = round(min(lost_monthly * 6, a.gmv_total_6m), 0)
-        ev = round(config.SAVE_RATE * at_risk, 0)
+        at_risk, evalue, ptype = ev.reengage_prize(a)
+        lost_monthly = ev.reengage_lost_monthly(a)
         gap = "silent for a quarter" if seg.health == "dormant" else f"run-rate down £{lost_monthly:,.0f}/mo"
         # A broker-reliant account's drop may be the AM easing off, not the
         # customer disengaging — flag it so the call checks the right actor.
@@ -114,22 +111,20 @@ def _decide(a: Account, seg: SegmentResult) -> Decision:
         return Decision(**base, play="reengage", channel="call",
                         action="Win-back call: find what changed, bring one concrete hook (fresh stock in their lines)" + actor,
                         reason=f"£{at_risk:,.0f} of forward GMV at risk — {gap}",
-                        prize_type="GMV at risk (fwd)", prize_gmv=at_risk, gmv_at_stake=at_risk,
-                        expected_value=ev, priority=ev)
+                        prize_type=ptype, prize_gmv=at_risk, gmv_at_stake=at_risk,
+                        expected_value=evalue, priority=evalue)
 
     # 2. Onboard new accounts. Ranked on RAMP POTENTIAL (the value of activating
     #    them onto the growth trajectory), not their tiny current spend — a new
     #    account is nurtured, not migrated or upsold. Takes precedence over the
     #    lifecycle plays below for young accounts.
     if a.tenure_months < config.ONBOARDING_TENURE_MAX:
-        ramp = round(max(config.EARLY_SUCCESS_GMV_TARGET - a.gmv_total_6m,
-                         config.EARLY_SUCCESS_GMV_TARGET * 0.3), 0)
-        ev = round(config.ONBOARD_ACTIVATION_RATE * ramp, 0)
+        ramp, evalue, ptype = ev.onboard_prize(a)
         return Decision(**base, play="onboard", channel="call",
                         action="Proactive early-success call: help land the first orders, set a cadence, make the app easy",
                         reason=f"{a.tenure_months:.0f}mo old, {a.orders_6m} orders, no AM support yet — onboarding gap",
-                        prize_type="ramp potential", prize_gmv=ramp, gmv_at_stake=ramp,
-                        expected_value=ev, priority=ev)
+                        prize_type=ptype, prize_gmv=ramp, gmv_at_stake=ramp,
+                        expected_value=evalue, priority=evalue)
 
     # 3. Migrate broker-reliant material accounts. NB the £ on a human is NOT at
     #    risk — that spend continues if we do nothing. The prize of migrating is
@@ -138,9 +133,7 @@ def _decide(a: Account, seg: SegmentResult) -> Decision:
         if not material:
             return Decision(**base, play=None,
                             reason=f"broker-reliant but only £{a.gmv_total_6m:,.0f} — below migration floor, batch later")
-        on_a_human = round(a.gmv_total_6m * a.broker_reliance / 100, 0)
-        convert = config.CONVERT_RATE_WARM if seg.subtype == "warm" else config.CONVERT_RATE_COLD
-        ev = round(convert * on_a_human * config.MIGRATION_EXPANSION, 0)
+        on_a_human, evalue, ptype = ev.migrate_prize(a, warm=(seg.subtype == "warm"))
         if a.gmv_total_6m >= config.WHALE_GMV:
             # Too much spend to risk on a self-serve nudge — hand over in phases
             # with the AM shadowing, so a wobble doesn't cost the account.
@@ -158,19 +151,19 @@ def _decide(a: Account, seg: SegmentResult) -> Decision:
         conf = " · reliance recomputed from counts (reported disagreed)" if a.reliance_discrepancy else ""
         return Decision(**base, play="migrate_to_selfserve", channel=channel, action=action,
                         reason=f"£{on_a_human:,.0f} of GMV riding on a human ({a.broker_reliance:.0f}% broker-placed); {seg.reasons[-1]}{conf}",
-                        prize_type="GMV on a human", prize_gmv=on_a_human, gmv_at_stake=on_a_human,
-                        expected_value=ev, priority=ev)
+                        prize_type=ptype, prize_gmv=on_a_human, gmv_at_stake=on_a_human,
+                        expected_value=evalue, priority=evalue)
 
     # 3. Grow self-serve accounts with headroom. Prize is MODELLED uplift (a
     #    conservative slice of the engagement premium), not money in hand.
     if seg.segment == "self_serve_growth":
         feature, why = choose_feature(a)
-        uplift = round(a.gmv_total_6m * config.GROWTH_UPLIFT_PCT[feature], 0)
+        uplift, evalue, ptype = ev.grow_prize(a, feature)
         return Decision(**base, play="grow_selfserve", channel="whatsapp", feature=feature,
                         action=f"Nudge {feature.replace('_', ' ')}: {_feature_offer(feature)}",
                         reason=why,
-                        prize_type="modelled uplift", prize_gmv=uplift, gmv_at_stake=uplift,
-                        expected_value=uplift, priority=uplift)
+                        prize_type=ptype, prize_gmv=uplift, gmv_at_stake=uplift,
+                        expected_value=evalue, priority=evalue)
 
     # 4. Everyone else — healthy and self-serving, or assisted-but-fine. Leave alone.
     return Decision(**base, play=None,
