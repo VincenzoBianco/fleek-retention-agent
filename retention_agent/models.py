@@ -84,6 +84,21 @@ class Decision(BaseModel):
     agent_rationale: Optional[str] = None  # the agent's fuller reasoning (close calls, departures)
 
 
+def skip_reason(holdout: bool, play: Optional[str], reason: str) -> Optional[str]:
+    """Why a decided account isn't in the AM's queue — or None if it *is* queued.
+    One rule, shared by the live stream and the persisted view so a streamed skip
+    and a reloaded one classify identically:
+      holdout     — control group; intended play suppressed to measure lift.
+      key_account — named, human-owned relationship (guardrail forces no play).
+      no_action   — behaviour warrants leaving it alone this run.
+    (key_account is inferred from the guardrail's reason prefix in agent._assemble.)"""
+    if holdout:
+        return "holdout"
+    if play:
+        return None
+    return "key_account" if reason.startswith("KEY ACCOUNT") else "no_action"
+
+
 class RunReport(BaseModel):
     """Summary of one orchestrator run — the 'what changed' an AM reads each morning."""
 

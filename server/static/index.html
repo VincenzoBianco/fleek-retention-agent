@@ -88,6 +88,26 @@
   .runfoot b{color:var(--ink2);font-variant-numeric:tabular-nums;}
   .runfoot .pbar{width:180px;height:5px;background:var(--line);border-radius:3px;overflow:hidden;}
   .runfoot .pbar i{display:block;height:100%;background:var(--brand);transition:width .25s ease;}
+  /* ---- skipped (not-queued) panel ---- */
+  .skipwrap{border-top:1px solid var(--line);margin-top:6px;}
+  .skiphead{display:flex;align-items:center;gap:8px;padding:13px 4px;cursor:pointer;font-size:13px;
+    color:var(--muted);user-select:none;}
+  .skiphead:hover{color:var(--ink2);}
+  .skiphead b{color:var(--ink2);font-variant-numeric:tabular-nums;}
+  .skipcaret{font-size:10px;width:10px;color:var(--muted);transition:transform .15s;}
+  .skiplegend{margin-left:auto;font-size:11px;font-family:var(--mono);color:var(--muted);}
+  .skiplist{display:flex;flex-direction:column;gap:1px;padding-bottom:14px;}
+  .skiprow{display:flex;align-items:baseline;gap:10px;padding:7px 9px;border-radius:7px;cursor:pointer;
+    font-size:12.5px;}
+  .skiprow:hover{background:var(--card);}
+  .skiprow .sid{font-family:var(--mono);font-size:12px;min-width:88px;}
+  .skiprow .swhy{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .skiprow .sgmv{font-family:var(--mono);font-size:11px;color:var(--ink2);}
+  .skiptag{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;
+    padding:1px 6px;border-radius:5px;white-space:nowrap;}
+  .skiptag.holdout{background:#f0eefb;color:var(--key);}
+  .skiptag.key_account{background:#fbf3e3;color:#b0791f;}
+  .skiptag.no_action{background:#eef1ec;color:#7d857a;}
   /* drawer */
   #ov{position:fixed;inset:0;background:rgba(0,0,0,.28);display:none;z-index:10;}
   #drawer{position:fixed;top:0;right:0;height:100%;width:460px;max-width:92vw;background:var(--paper);
@@ -263,6 +283,14 @@
   <div class="queue" id="rows"></div>
   <div class="empty" id="empty" style="display:none"></div>
   <div class="runfoot" id="runfoot" style="display:none"></div>
+  <div class="skipwrap" id="skipwrap" style="display:none">
+    <div class="skiphead" onclick="toggleSkipped()">
+      <span class="skipcaret" id="skipcaret">▸</span>
+      <b id="skipcount">0</b> <span>not queued</span>
+      <span class="skiplegend" id="skiplegend"></span>
+    </div>
+    <div class="skiplist" id="skiplist" style="display:none"></div>
+  </div>
 </div>
 
 <div class="wrap" id="view-dashboard" style="display:none">
@@ -324,6 +352,8 @@
 <script>
 let STATE=null, SORT='expected_value', DIR=-1;
 let RUNNING=false, PROG={done:0,total:0,found:0};   // live-run progress for the spinner
+let LIVE={};        // account_id -> full detail, streamed during a run so the drawer opens mid-run
+let SKIPSHOW=false; // is the "not queued" list expanded?
 const gbp=n=>'£'+Math.round(n||0).toLocaleString();
 const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800);};
 
@@ -366,6 +396,7 @@ function render(){
   document.getElementById('count').textContent=rows.length+' shown';
   document.getElementById('rows').innerHTML=rows.map(cardHTML).join('');
   renderFoot();
+  renderSkipped();
 }
 function cardHTML(r){
   const play=(r.play||'').replace(/_/g,' ');
@@ -402,7 +433,7 @@ function renderFoot(){
     empty.style.display='none'; foot.style.display='flex';
     const pct=PROG.total?Math.round(PROG.done/PROG.total*100):0;
     foot.innerHTML=`<div class="spinner"></div>
-      <div>${PROG.total?`Evaluating accounts — <b>${PROG.done}</b> / <b>${PROG.total}</b>`:'Starting run…'}${PROG.found?` · <b>${PROG.found}</b> in queue`:''}</div>
+      <div>${PROG.total?`Evaluating accounts — <b>${PROG.done}</b> / <b>${PROG.total}</b>`:'Starting run…'}${PROG.found?` · <b>${PROG.found}</b> in queue`:''}${(STATE&&STATE.skipped&&STATE.skipped.length)?` · <b>${STATE.skipped.length}</b> not queued`:''}</div>
       ${PROG.total?`<div class="pbar"><i style="width:${pct}%"></i></div>`:''}`;
     return;
   }
@@ -413,10 +444,42 @@ function renderFoot(){
     ? 'No run yet — hit <b>Run · Accounts</b> above.'
     : 'No workbook yet — hit <b>Upload .xlsx</b> above to begin.';
 }
+const SKIPLABEL={holdout:'holdout',key_account:'key account',no_action:'no action'};
+function toggleSkipped(){SKIPSHOW=!SKIPSHOW;renderSkipped();}
+function renderSkipped(){
+  const wrap=document.getElementById('skipwrap');
+  const skip=((STATE&&STATE.skipped)||[]);
+  if(!skip.length){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  document.getElementById('skipcount').textContent=skip.length;
+  // legend: a count per reason, in a stable order
+  const by={holdout:0,key_account:0,no_action:0};
+  skip.forEach(r=>{by[r.skip_reason]=(by[r.skip_reason]||0)+1;});
+  document.getElementById('skiplegend').textContent=
+    ['holdout','key_account','no_action'].filter(k=>by[k]).map(k=>`${by[k]} ${SKIPLABEL[k]}`).join(' · ');
+  document.getElementById('skipcaret').textContent=SKIPSHOW?'▾':'▸';
+  const list=document.getElementById('skiplist');
+  list.style.display=SKIPSHOW?'flex':'none';
+  if(!SKIPSHOW){return;}
+  const rows=skip.slice().sort((a,b)=>(b.gmv_total||0)-(a.gmv_total||0));
+  list.innerHTML=rows.map(r=>{
+    const rn=r.skip_reason||'no_action';
+    return `<div class="skiprow" onclick="open_('${r.account_id}')">
+      <span class="sid">${esc(r.account_id)}</span>
+      <span class="skiptag ${rn}">${SKIPLABEL[rn]||rn}</span>
+      <span class="swhy">${esc(r.reason||'')}</span>
+      <span class="sgmv">${gbp(r.gmv_total)}</span>
+    </div>`;}).join('');
+}
 
 async function open_(aid){
-  const a=await (await fetch('/api/account/'+aid)).json();
-  if(!a||a.error){toast(RUNNING?'Still evaluating '+aid+' — opens once the run finishes':'Account not found');return;}
+  // The persisted row is authoritative once a run has committed. Mid-run the store
+  // isn't written yet, so fall back to the streamed live cache — the decision is
+  // already made, only the draft (written after the decision loop) is pending.
+  let a=LIVE[aid]||null;
+  try{const r=await (await fetch('/api/account/'+aid)).json();if(r&&!r.error)a=r;}catch(_){}
+  if(!a){toast(RUNNING?'Not evaluated yet — '+aid:'Account not found');return;}
+  const sr=a.skip_reason||((a.holdout)?'holdout':(a.play?null:(String(a.reason||'').startsWith('KEY ACCOUNT')?'key_account':'no_action')));
   const d=document.getElementById('drawer');
   const sig=[['GMV 6mo',gbp(a.gmv_total)],['tier',a.transaction_mode||'—'],['persona',a.persona||'—'],['region',a.region||'—']];
   d.innerHTML=`
@@ -424,6 +487,8 @@ async function open_(aid){
     <h2>${a.account_id}${a.holdout?'<span class="flag">HOLDOUT</span>':''}
       <span class="qby ${a.decided_by==='agent'?'ag':'det'}" style="float:none;margin-left:6px">${a.decided_by==='agent'?'⚡ agent':'rules'}</span></h2>
     <div class="muted">${a.segment} · ${a.health} · ${a.play?a.play.replace(/_/g,' '):'no action'}</div>
+    ${(sr&&sr!=='holdout')?`<div class="box" style="margin-top:12px"><div class="lbl">Not queued — ${SKIPLABEL[sr]||sr}</div><div>${sr==='key_account'?'Named, human-owned relationship — handled personally, never auto-queued.':'The best action this run is to leave this account alone.'}</div></div>`:''}
+    ${sr==='holdout'?`<div class="box" style="margin-top:12px"><div class="lbl">Not queued — holdout (control)</div><div>In the control group: the intended play is recorded but no outreach fires, so we can measure causal lift.</div></div>`:''}
     <div class="sig">${sig.map(s=>`<span>${s[0]}: ${s[1]}</span>`).join('')}</div>
     <div class="kv">
       <div class="k">Expected value</div><div class="v">${gbp(a.expected_value)}</div>
@@ -461,11 +526,13 @@ async function upload(){
 async function run(sheet){
   const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
   showTab('queue');                         // make the table visible while it fills
-  RUNNING=true; PROG={done:0,total:0,found:0};
+  RUNNING=true; PROG={done:0,total:0,found:0}; LIVE={};
   // Seed the live view with the current queue so a re-run keeps existing rows and
   // updates/adds accounts in place as they're decided (a first run starts empty).
+  // The skipped list is rebuilt from scratch as this run's decisions stream in.
   if(!STATE)STATE={};
   STATE.queue=(STATE.queue||[]).slice();
+  STATE.skipped=[];
   toast('Running '+sheet+'…'); render();
   try{
     const resp=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -485,11 +552,20 @@ async function run(sheet){
   finally{RUNNING=false;btns.forEach(b=>b.disabled=false);render();}
 }
 function handleRunEvent(ev){
-  if(ev.type==='progress'){PROG.done=ev.done;PROG.total=ev.total;renderFoot();}
-  else if(ev.type==='row'){
-    const q=STATE.queue,i=q.findIndex(x=>x.account_id===ev.row.account_id);
-    if(i>=0)q[i]=ev.row;else q.push(ev.row);   // upsert by account_id
-    PROG.found=q.length; render();
+  if(ev.type==='decided'){
+    PROG.done=ev.done;PROG.total=ev.total;
+    const det=ev.detail;
+    LIVE[det.account_id]=det;                  // cache so the drawer opens mid-run
+    if(ev.queued){
+      const q=STATE.queue,i=q.findIndex(x=>x.account_id===det.account_id);
+      if(i>=0)q[i]=det;else q.push(det);       // upsert by account_id
+      PROG.found=q.length;
+    }else{
+      const sk={...det,skip_reason:ev.skip_reason};
+      const s=STATE.skipped,i=s.findIndex(x=>x.account_id===det.account_id);
+      if(i>=0)s[i]=sk;else s.push(sk);         // upsert by account_id
+    }
+    render();
   }
   else if(ev.type==='done'){
     RUNNING=false; const r=ev.report;

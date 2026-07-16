@@ -20,7 +20,7 @@ import sqlite3
 from pathlib import Path
 
 from . import config
-from .models import Account, Decision, RunReport
+from .models import Account, Decision, RunReport, skip_reason
 
 
 class Store:
@@ -166,6 +166,22 @@ class Store:
 
     def holdout_count(self) -> int:
         return self.db.execute("SELECT COUNT(*) c FROM accounts WHERE holdout=1").fetchone()["c"]
+
+    def skipped(self, limit: int | None = None) -> list[dict]:
+        """The queue's shadow: decided accounts an AM *doesn't* work — holdout
+        controls and 'leave alone' accounts (incl. key accounts). Surfacing these
+        keeps a run from being a black box about what it deliberately didn't action.
+        Each row carries a `skip_reason` so the UI can group them."""
+        q = ("SELECT * FROM accounts WHERE play IS NULL OR holdout=1 "
+             "ORDER BY gmv_total DESC")
+        if limit:
+            q += f" LIMIT {int(limit)}"
+        out = []
+        for r in self.db.execute(q).fetchall():
+            d = dict(r)
+            d["skip_reason"] = skip_reason(bool(d["holdout"]), d["play"], d["reason"] or "")
+            out.append(d)
+        return out
 
     def key_accounts(self, share: float = None) -> list[dict]:
         """Accounts so concentrated they're named, human-owned relationships — not
