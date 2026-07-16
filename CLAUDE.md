@@ -99,3 +99,10 @@ data, so they run without it.
 - **A new signal for the agent** → add a method + schema in `tools.py`.
 - **The £ model** → `ev.py` (and it flows to both the fallback and the tool).
 - **Outreach wording** → `draft.py`.
+- **Anything visual (colours, spacing, cards, chrome)** → the `:root` design-token
+  block at the top of `server/static/index.html` is the **single source of truth**
+  for the whole app. The Action Queue and Dashboard both read from it; legacy
+  `--paper/--card/--line` names are aliased onto it. The queue is organised by
+  **task owner** — `call` → Human section, `whatsapp`/`in_app` → Agent section
+  (`OWNER()` in the same file) — kept distinct from `decided_by` (the provenance
+  chip: AI-decided vs rule-based).
