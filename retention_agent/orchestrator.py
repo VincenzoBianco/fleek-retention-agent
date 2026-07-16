@@ -8,8 +8,9 @@ run after only touches what's new or changed, and reuses the rest.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Callable, Optional
 
 from . import learning
 from .agent import Analyst
@@ -22,9 +23,18 @@ from .segment import classify
 from .store import Store
 
 
+def _safe(fn, *args) -> None:
+    """A progress hook must never break a run — swallow anything it throws."""
+    try:
+        fn(*args)
+    except Exception:
+        pass
+
+
 def run(source_path: str | Path, sheet: str, store: Store,
         use_llm: bool = False, use_agent: bool = True, workers: int = 8,
-        source_ts: float = 0.0) -> RunReport:
+        source_ts: float = 0.0,
+        on_decision: Optional[Callable[[object, object, int, int], None]] = None) -> RunReport:
     accounts = load_accounts(source_path, sheet)
     run_id = store.start_run(f"{Path(source_path).name}:{sheet}")
 
@@ -41,13 +51,33 @@ def run(source_path: str | Path, sheet: str, store: Store,
     # failure — it falls back to the deterministic engine. The agent call is the
     # expensive step, so fan it out across the worker pool. Portfolio/peer tools see
     # the whole loaded book, not just the decided slice.
+    #
+    # `on_decision(account, decision, done, total)` is an optional progress hook —
+    # the live dashboard uses it to stream accounts into the table as each one is
+    # decided (an agent run is slow, one account at a time). It's fired as decisions
+    # *complete* (not in input order), so the UI fills in finish order. It never
+    # affects the result: `decisions` is keyed by account_id, order-independent.
+    total = len(to_decide)
     analyst = Analyst() if use_agent else None
+    decisions: dict[str, object] = {}
     if analyst is not None and analyst.enabled and to_decide:
         with ThreadPoolExecutor(max_workers=workers) as ex:
-            decided = ex.map(lambda a: (a.account_id, analyst.evaluate(a, accounts)), to_decide)
-            decisions = dict(decided)
+            futs = {ex.submit(analyst.evaluate, a, accounts): a for a in to_decide}
+            for done, fut in enumerate(as_completed(futs), 1):
+                a = futs[fut]
+                try:
+                    d = fut.result()
+                except Exception:               # keep the invariant: a run never dies
+                    d = decide(a, classify(a))
+                decisions[a.account_id] = d
+                if on_decision:
+                    _safe(on_decision, a, d, done, total)
     else:
-        decisions = {a.account_id: decide(a, classify(a)) for a in to_decide}
+        for done, a in enumerate(to_decide, 1):
+            d = decide(a, classify(a))
+            decisions[a.account_id] = d
+            if on_decision:
+                _safe(on_decision, a, d, done, total)
 
     # Draft only accounts that have a play AND aren't in the control group.
     # Heuristics are instant; with the LLM on we fan the calls out across a

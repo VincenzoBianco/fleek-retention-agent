@@ -45,6 +45,49 @@
   .p-migrate_to_selfserve{background:#fdf1e3;color:var(--managed);} .p-grow_selfserve{background:#e7f6ef;color:var(--serve);}
   .p-reengage{background:#fbe9e9;color:var(--risk);} .p-onboard{background:#efedfb;color:var(--key);}
   .muted{color:var(--muted);font-size:11px;}
+  /* ---- action-queue cards ---- */
+  .queue{display:flex;flex-direction:column;gap:10px;}
+  .qcard{display:flex;gap:16px;background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:14px 16px;cursor:pointer;transition:box-shadow .12s,border-color .12s;animation:cardin .22s ease;}
+  .qcard:hover{box-shadow:var(--shadow);border-color:#d3d6cf;}
+  @keyframes cardin{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+  .qmain{flex:1;min-width:0;}
+  .qhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
+  .qid{font-family:var(--mono);font-weight:700;font-size:13.5px;color:var(--ink);}
+  .qseg{font-size:11px;color:var(--muted);font-family:var(--mono);}
+  .qby{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;font-family:var(--mono);
+    text-transform:uppercase;letter-spacing:.04em;}
+  .qby.ag{background:#efedfb;color:var(--key);} .qby.det{background:#eef1ee;color:var(--muted);}
+  .qhold{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;background:#fdf1e3;color:var(--managed);
+    font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;}
+  .qact{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
+  .qfeat{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .qactx{font-size:13px;color:var(--ink2);font-weight:500;}
+  .qwhy{font-size:12.5px;color:var(--ink2);line-height:1.5;}
+  .qlbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    margin-right:8px;vertical-align:1px;}
+  .qrat{margin-top:7px;padding-left:11px;border-left:2px solid var(--line);color:var(--muted);
+    font-size:12px;line-height:1.55;font-style:italic;}
+  .qrail{width:148px;flex-shrink:0;border-left:1px solid var(--line);padding-left:16px;
+    display:flex;flex-direction:column;gap:10px;text-align:right;}
+  .qev .qevv{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--brand);
+    font-variant-numeric:tabular-nums;line-height:1;}
+  .qev .qevl,.qprize .qpl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;}
+  .qprize .qpv{font-family:var(--mono);font-size:14px;color:var(--ink2);font-variant-numeric:tabular-nums;}
+  .qchan{align-self:flex-end;font-family:var(--mono);font-size:10px;color:var(--muted);
+    background:#f4f6f3;border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.03em;}
+  @media(max-width:640px){.qcard{flex-direction:column;}
+    .qrail{width:auto;border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:11px;
+      text-align:left;flex-direction:row;gap:22px;align-items:baseline;}.qchan{align-self:auto;}}
+  /* ---- run spinner / progress footer ---- */
+  .runfoot{display:flex;align-items:center;justify-content:center;gap:12px;padding:26px;
+    color:var(--muted);font-size:13px;}
+  .spinner{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--brand);
+    border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .runfoot b{color:var(--ink2);font-variant-numeric:tabular-nums;}
+  .runfoot .pbar{width:180px;height:5px;background:var(--line);border-radius:3px;overflow:hidden;}
+  .runfoot .pbar i{display:block;height:100%;background:var(--brand);transition:width .25s ease;}
   /* drawer */
   #ov{position:fixed;inset:0;background:rgba(0,0,0,.28);display:none;z-index:10;}
   #drawer{position:fixed;top:0;right:0;height:100%;width:460px;max-width:92vw;background:var(--paper);
@@ -164,8 +207,7 @@
   <span class="wb" id="wb"></span>
   <span class="sp"></span>
   <span id="llmstatus" class="wb"></span>
-  <label class="tog"><input type="checkbox" id="llm"> use LLM drafts</label>
-  <input type="file" id="file" accept=".xlsx,.xls" style="display:none" onchange="upload()">
+  <input type="file" id="file" accept=".xlsx" style="display:none" onchange="upload()">
   <button onclick="document.getElementById('file').click()">Upload .xlsx</button>
   <button onclick="run('Accounts')">Run · Accounts</button>
   <button onclick="run('new_accounts')">Run · new_accounts</button>
@@ -177,19 +219,18 @@
   <div id="banners"></div>
   <div class="chips" id="chips"></div>
   <div class="toolbar">
-    <input type="search" id="q" placeholder="Search account id / reason…" oninput="render()">
+    <input type="search" id="q" placeholder="Search account, reason, or rationale…" oninput="render()">
     <select id="playf" onchange="render()"><option value="">All plays</option></select>
+    <select id="sortf" onchange="setSort(this.value)">
+      <option value="expected_value">Sort: EV ↓</option>
+      <option value="gmv_at_stake">Sort: prize ↓</option>
+      <option value="account_id">Sort: account</option>
+    </select>
     <span class="muted" id="count"></span>
   </div>
-  <table id="tbl"><thead><tr>
-    <th onclick="sortBy('account_id')">Account</th>
-    <th onclick="sortBy('segment')">Segment</th>
-    <th onclick="sortBy('play')">Play</th>
-    <th class="n" onclick="sortBy('expected_value')">EV ▾</th>
-    <th class="n" onclick="sortBy('gmv_at_stake')">Prize</th>
-    <th>Why</th>
-  </tr></thead><tbody id="rows"></tbody></table>
+  <div class="queue" id="rows"></div>
   <div class="empty" id="empty" style="display:none"></div>
+  <div class="runfoot" id="runfoot" style="display:none"></div>
 </div>
 
 <div class="wrap" id="view-dashboard" style="display:none">
@@ -239,15 +280,16 @@
 
 <script>
 let STATE=null, SORT='expected_value', DIR=-1;
+let RUNNING=false, PROG={done:0,total:0,found:0};   // live-run progress for the spinner
 const gbp=n=>'£'+Math.round(n||0).toLocaleString();
 const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800);};
 
 async function load(){
   STATE=await (await fetch('/api/state')).json();
   document.getElementById('wb').textContent=STATE.workbook?('data/raw/'+STATE.workbook):'no workbook in data/raw';
-  const ls=document.getElementById('llmstatus'), tog=document.getElementById('llm');
-  if(STATE.llm_available){ls.textContent='● LLM: ready';ls.style.color='#4ade80';tog.disabled=false;}
-  else{ls.textContent='○ LLM: no key (templated drafts)';ls.style.color='#c98a3a';tog.checked=false;tog.disabled=true;}
+  const ls=document.getElementById('llmstatus');
+  if(STATE.llm_available){ls.textContent='● LLM: ready — agent decides & drafts';ls.style.color='#4ade80';}
+  else{ls.textContent='○ LLM: no key — deterministic + templated drafts';ls.style.color='#c98a3a';}
   renderBanners(); renderChips(); renderPlayFilter(); render();
 }
 function renderBanners(){
@@ -275,32 +317,69 @@ function renderPlayFilter(){
 function render(){
   const q=(document.getElementById('q').value||'').toLowerCase();
   const pf=document.getElementById('playf').value;
-  let rows=(STATE.queue||[]).filter(r=>(!pf||r.play===pf)&&
-    (!q||(r.account_id+' '+(r.reason||'')).toLowerCase().includes(q)));
-  rows.sort((a,b)=>{const x=a[SORT],y=b[SORT];return (x>y?1:x<y?-1:0)*DIR;});
-  const emptyEl=document.getElementById('empty');
-  emptyEl.style.display=(STATE.queue||[]).length?'none':'block';
-  emptyEl.innerHTML=STATE.workbook
+  let rows=((STATE&&STATE.queue)||[]).filter(r=>(!pf||r.play===pf)&&
+    (!q||(r.account_id+' '+(r.reason||'')+' '+(r.agent_rationale||'')).toLowerCase().includes(q)));
+  rows.sort((a,b)=>{const x=a[SORT]??-Infinity,y=b[SORT]??-Infinity;return (x>y?1:x<y?-1:0)*DIR;});
+  document.getElementById('count').textContent=rows.length+' shown';
+  document.getElementById('rows').innerHTML=rows.map(cardHTML).join('');
+  renderFoot();
+}
+function cardHTML(r){
+  const play=(r.play||'').replace(/_/g,' ');
+  const agent=r.decided_by==='agent';
+  const why=r.reason||'';
+  // Show the agent's fuller rationale beneath the one-line reason when it adds detail.
+  const rat=(r.agent_rationale&&r.agent_rationale.trim()&&r.agent_rationale.trim()!==why.trim())?r.agent_rationale:'';
+  return `<div class="qcard" onclick="open_('${r.account_id}')">
+    <div class="qmain">
+      <div class="qhead">
+        <span class="qid">${esc(r.account_id)}</span>
+        ${r.segment?`<span class="qseg">${esc(r.segment)}${r.health?' · '+esc(r.health):''}</span>`:''}
+        <span class="qby ${agent?'ag':'det'}">${agent?'⚡ agent':'rules'}</span>
+      </div>
+      <div class="qact">
+        ${r.play?`<span class="play p-${r.play}">${esc(play)}</span>`:''}
+        ${r.feature?`<span class="qfeat">${esc(r.feature.replace(/_/g,' '))}</span>`:''}
+        ${r.action?`<span class="qactx">${esc(r.action)}</span>`:''}
+      </div>
+      ${why?`<div class="qwhy"><span class="qlbl">Why</span>${esc(why)}
+        ${rat?`<div class="qrat">${esc(rat)}</div>`:''}</div>`:''}
+    </div>
+    <div class="qrail">
+      <div class="qev"><div class="qevv">${gbp(r.expected_value)}</div><div class="qevl">expected value</div></div>
+      <div class="qprize"><div class="qpv">${gbp(r.gmv_at_stake)}</div><div class="qpl">${esc(r.prize_type||'prize')}</div></div>
+      ${r.channel?`<div class="qchan">${esc(r.channel.replace(/_/g,' '))}</div>`:''}
+    </div>
+  </div>`;
+}
+function setSort(k){SORT=k;DIR=(k==='account_id')?1:-1;render();}
+function renderFoot(){
+  const foot=document.getElementById('runfoot'), empty=document.getElementById('empty');
+  if(RUNNING){
+    empty.style.display='none'; foot.style.display='flex';
+    const pct=PROG.total?Math.round(PROG.done/PROG.total*100):0;
+    foot.innerHTML=`<div class="spinner"></div>
+      <div>${PROG.total?`Evaluating accounts — <b>${PROG.done}</b> / <b>${PROG.total}</b>`:'Starting run…'}${PROG.found?` · <b>${PROG.found}</b> in queue`:''}</div>
+      ${PROG.total?`<div class="pbar"><i style="width:${pct}%"></i></div>`:''}`;
+    return;
+  }
+  foot.style.display='none';
+  const has=((STATE&&STATE.queue)||[]).length;
+  empty.style.display=has?'none':'block';
+  empty.innerHTML=(STATE&&STATE.workbook)
     ? 'No run yet — hit <b>Run · Accounts</b> above.'
     : 'No workbook yet — hit <b>Upload .xlsx</b> above to begin.';
-  document.getElementById('count').textContent=rows.length+' shown';
-  document.getElementById('rows').innerHTML=rows.map(r=>`<tr onclick="open_('${r.account_id}')">
-    <td class="n">${r.account_id}</td>
-    <td>${r.segment||''}<br><span class="muted">${r.health||''}</span></td>
-    <td><span class="play p-${r.play}">${(r.play||'').replace(/_/g,' ')}</span>${r.feature?'<br><span class="muted">'+r.feature.replace(/_/g,' ')+'</span>':''}</td>
-    <td class="n">${gbp(r.expected_value)}</td>
-    <td class="n">${gbp(r.gmv_at_stake)}<br><span class="muted">${r.prize_type||''}</span></td>
-    <td>${(r.reason||'').replace(/</g,'&lt;')}</td></tr>`).join('');
 }
-function sortBy(k){DIR=(SORT===k)?-DIR:-1;SORT=k;render();}
 
 async function open_(aid){
   const a=await (await fetch('/api/account/'+aid)).json();
+  if(!a||a.error){toast(RUNNING?'Still evaluating '+aid+' — opens once the run finishes':'Account not found');return;}
   const d=document.getElementById('drawer');
   const sig=[['GMV 6mo',gbp(a.gmv_total)],['tier',a.transaction_mode||'—'],['persona',a.persona||'—'],['region',a.region||'—']];
   d.innerHTML=`
     <button onclick="closeDrawer()" style="float:right">✕</button>
-    <h2>${a.account_id}${a.holdout?'<span class="flag">HOLDOUT</span>':''}</h2>
+    <h2>${a.account_id}${a.holdout?'<span class="flag">HOLDOUT</span>':''}
+      <span class="qby ${a.decided_by==='agent'?'ag':'det'}" style="float:none;margin-left:6px">${a.decided_by==='agent'?'⚡ agent':'rules'}</span></h2>
     <div class="muted">${a.segment} · ${a.health} · ${a.play?a.play.replace(/_/g,' '):'no action'}</div>
     <div class="sig">${sig.map(s=>`<span>${s[0]}: ${s[1]}</span>`).join('')}</div>
     <div class="kv">
@@ -309,6 +388,8 @@ async function open_(aid){
       <div class="k">Channel</div><div class="v">${a.channel||'—'}</div>
     </div>
     <div class="box"><div class="lbl">Why</div><div>${(a.reason||'').replace(/</g,'&lt;')}</div></div>
+    ${a.agent_rationale&&a.agent_rationale.trim()&&a.agent_rationale.trim()!==(a.reason||'').trim()
+      ?`<div class="box"><div class="lbl">Agent reasoning</div><div class="qrat" style="border:none;padding:0;margin:0;font-style:normal;color:var(--ink2)">${a.agent_rationale.replace(/</g,'&lt;')}</div></div>`:''}
     <div class="box"><div class="lbl">Next best action</div><div>${(a.action||'—').replace(/</g,'&lt;')}</div></div>
     ${a.draft?`<div class="box"><div class="lbl">Drafted ${a.channel==='call'?'call note':'message'}</div><div class="draft">${a.draft.replace(/</g,'&lt;')}</div></div>`:''}
     ${a.play&&!a.holdout?`<div class="box"><div class="lbl">Log outcome (feeds the learning loop)</div>
@@ -325,21 +406,54 @@ async function upload(){
   const inp=document.getElementById('file'); const f=inp.files[0]; if(!f)return;
   const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
   toast('Uploading '+f.name+'…');
-  const fd=new FormData(); fd.append('file',f);
-  const r=await (await fetch('/api/upload',{method:'POST',body:fd})).json();
-  inp.value=''; btns.forEach(b=>b.disabled=false);
-  if(r.error){toast('Error: '+r.error);return;}
-  toast('Uploaded '+r.workbook+' — hit Run'); await load();
+  try{
+    const fd=new FormData(); fd.append('file',f);
+    const resp=await fetch('/api/upload',{method:'POST',body:fd});
+    let r={}; try{r=await resp.json();}catch(_){}   // a 5xx may not be JSON — don't swallow it
+    if(!resp.ok||r.error){toast('Upload failed: '+(r.error||('HTTP '+resp.status)));return;}
+    toast('Uploaded '+r.workbook+' — hit Run · Accounts'); await load();
+  }catch(err){toast('Upload failed: '+err);}     // network error, etc.
+  finally{inp.value=''; btns.forEach(b=>b.disabled=false);}   // never leave the UI locked
 }
 async function run(sheet){
   const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
-  toast('Running '+sheet+'…');
-  const r=await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({sheet,llm:document.getElementById('llm').checked})})).json();
-  btns.forEach(b=>b.disabled=false);
-  if(r.error){toast('Error: '+r.error);return;}
-  toast(`Run #${r.run_id}: ${r.n_new} new · ${r.n_changed} changed · ${r.n_unchanged_skipped} skipped`);
-  await load();
+  showTab('queue');                         // make the table visible while it fills
+  RUNNING=true; PROG={done:0,total:0,found:0};
+  // Seed the live view with the current queue so a re-run keeps existing rows and
+  // updates/adds accounts in place as they're decided (a first run starts empty).
+  if(!STATE)STATE={};
+  STATE.queue=(STATE.queue||[]).slice();
+  toast('Running '+sheet+'…'); render();
+  try{
+    const resp=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sheet})});
+    if(!resp.ok){let e={};try{e=await resp.json();}catch(_){}toast('Error: '+(e.error||('HTTP '+resp.status)));return;}
+    const reader=resp.body.getReader(),dec=new TextDecoder();let buf='';
+    for(;;){
+      const {value,done}=await reader.read();
+      if(value){buf+=dec.decode(value,{stream:true});
+        let nl;while((nl=buf.indexOf('\n'))>=0){
+          const line=buf.slice(0,nl).trim();buf=buf.slice(nl+1);
+          if(line)handleRunEvent(JSON.parse(line));
+        }}
+      if(done)break;
+    }
+  }catch(err){toast('Run failed: '+err);}
+  finally{RUNNING=false;btns.forEach(b=>b.disabled=false);render();}
+}
+function handleRunEvent(ev){
+  if(ev.type==='progress'){PROG.done=ev.done;PROG.total=ev.total;renderFoot();}
+  else if(ev.type==='row'){
+    const q=STATE.queue,i=q.findIndex(x=>x.account_id===ev.row.account_id);
+    if(i>=0)q[i]=ev.row;else q.push(ev.row);   // upsert by account_id
+    PROG.found=q.length; render();
+  }
+  else if(ev.type==='done'){
+    RUNNING=false; const r=ev.report;
+    toast(`Run #${r.run_id}: ${r.n_new} new · ${r.n_changed} changed · ${r.n_unchanged_skipped} skipped`);
+    load();                                    // reconcile to authoritative state
+  }
+  else if(ev.type==='error'){RUNNING=false;toast('Error: '+ev.error);load();}
 }
 async function outcome(aid,o){
   const r=await (await fetch('/api/outcome',{method:'POST',headers:{'Content-Type':'application/json'},

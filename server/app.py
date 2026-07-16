@@ -13,14 +13,19 @@ threadpool), which is cheap — it's a local file.
 """
 from __future__ import annotations
 
+import json
+import os
+import queue
+import threading
 from pathlib import Path
 
 import pandas as pd
 from fastapi import Body, FastAPI, File, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from retention_agent import config, ingest
 from retention_agent.llm import LLM
+from retention_agent.models import Account, Decision
 from retention_agent.orchestrator import run as run_loop
 from retention_agent.report import action_queue_csv
 from retention_agent.store import Store
@@ -153,21 +158,70 @@ def account(aid: str):
         s.close()
 
 
+def _queue_row(a: Account, d: Decision) -> dict:
+    """The subset of a decision the live Action Queue card renders — shaped to match
+    the fields `store.action_queue()` returns, so a streamed row and a reloaded row
+    look identical. Only actionable, non-holdout accounts are streamed (the queue an
+    AM works never shows the control group or accounts left alone)."""
+    return {
+        "account_id": a.account_id,
+        "segment": d.segment, "health": d.health,
+        "play": d.play, "feature": d.feature,
+        "action": d.action, "reason": d.reason, "channel": d.channel,
+        "expected_value": d.expected_value, "gmv_at_stake": d.gmv_at_stake,
+        "prize_type": d.prize_type,
+        "decided_by": d.decided_by, "agent_rationale": d.agent_rationale,
+    }
+
+
 @app.post("/api/run")
 def do_run(payload: dict = Body(default={})):
+    """Stream the run as newline-delimited JSON so the dashboard fills the table as
+    each account is decided — an agent run evaluates one account at a time and is
+    slow, so waiting for the whole book before showing anything felt like a hang.
+
+    Events: {type:progress, done, total, account_id} for every decided account;
+    {type:row, row:{…}} for each one that lands in the queue; {type:done, report}
+    at the end; {type:error, error} on failure. Drafts are LLM-written by default
+    whenever a key is present (no user toggle) — otherwise templated."""
     wb = _workbook()
     if not wb:
         return JSONResponse({"error": "no workbook — upload an .xlsx first"}, status_code=400)
     sheet = payload.get("sheet", "Accounts")
-    s = _store()
-    try:
-        import os
-        report = run_loop(wb, sheet, s, use_llm=bool(payload.get("llm")),
-                          use_agent=payload.get("agent", True),
-                          source_ts=os.path.getmtime(wb))
-        return report.model_dump()
-    finally:
-        s.close()
+    use_agent = payload.get("agent", True)
+    use_llm = LLM().enabled          # a key present ⇒ the agent also drafts
+
+    events: "queue.Queue" = queue.Queue()
+
+    def worker():
+        # Own the Store on this thread — SQLite connections aren't shared across the
+        # threadpool. All DB writes happen here; the streamer only reads the queue.
+        s = _store()
+        try:
+            def on_decision(a, d, done, total):
+                events.put({"type": "progress", "done": done, "total": total,
+                            "account_id": a.account_id})
+                if d.play and not d.holdout:
+                    events.put({"type": "row", "row": _queue_row(a, d)})
+            report = run_loop(wb, sheet, s, use_llm=use_llm, use_agent=use_agent,
+                              source_ts=os.path.getmtime(wb), on_decision=on_decision)
+            events.put({"type": "done", "report": report.model_dump()})
+        except Exception as e:  # noqa: BLE001 — surface any failure to the client
+            events.put({"type": "error", "error": str(e)})
+        finally:
+            s.close()
+            events.put(None)     # sentinel: closes the stream
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def stream():
+        while True:
+            item = events.get()
+            if item is None:
+                break
+            yield json.dumps(item) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
 
 
 @app.post("/api/upload")
@@ -177,8 +231,12 @@ async def upload(file: UploadFile = File(...)):
     it up as the newest workbook. Locally this writes into data/raw, shared with
     the CLI; on serverless it writes into /tmp (ephemeral)."""
     name = Path(file.filename or "").name
-    if not name.lower().endswith((".xlsx", ".xls")):
-        return JSONResponse({"error": "expected an .xlsx file"}, status_code=400)
+    # .xlsx only: it's what openpyxl (our only Excel reader) handles and what
+    # `_workbook()` globs. Accepting legacy .xls here would write a file that is
+    # then silently never picked up (no xlrd, wrong glob) — so reject it up front.
+    if not name.lower().endswith(".xlsx"):
+        return JSONResponse({"error": "expected an .xlsx file (legacy .xls isn't supported)"},
+                            status_code=400)
     config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     (config.UPLOAD_DIR / name).write_bytes(await file.read())
     return {"ok": True, "workbook": name}
