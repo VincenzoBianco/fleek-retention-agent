@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import Body, FastAPI
+from fastapi import Body, FastAPI, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from retention_agent import config
@@ -32,8 +32,17 @@ def _store() -> Store:
 
 
 def _workbook() -> str | None:
-    xls = sorted(config.RAW_DIR.glob("*.xlsx"))
-    return str(xls[0]) if xls else None
+    """The workbook to run against: the most recently modified .xlsx across the
+    upload dir and data/raw. Upload dir first so a freshly uploaded file wins;
+    on serverless data/raw is read-only/empty and only the upload dir matters."""
+    seen: dict[str, Path] = {}
+    for d in (config.UPLOAD_DIR, config.RAW_DIR):
+        if d.exists():
+            for p in d.glob("*.xlsx"):
+                seen.setdefault(p.resolve().as_posix(), p)
+    if not seen:
+        return None
+    return str(max(seen.values(), key=lambda p: p.stat().st_mtime))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -76,7 +85,7 @@ def account(aid: str):
 def do_run(payload: dict = Body(default={})):
     wb = _workbook()
     if not wb:
-        return JSONResponse({"error": "no .xlsx in data/raw"}, status_code=400)
+        return JSONResponse({"error": "no workbook — upload an .xlsx first"}, status_code=400)
     sheet = payload.get("sheet", "Accounts")
     s = _store()
     try:
@@ -86,6 +95,20 @@ def do_run(payload: dict = Body(default={})):
         return report.model_dump()
     finally:
         s.close()
+
+
+@app.post("/api/upload")
+async def upload(file: UploadFile = File(...)):
+    """Accept an .xlsx and drop it into the writable upload dir, so a hosted
+    instance isn't tied to a file baked into the deploy. Next `/api/run` picks
+    it up as the newest workbook. Locally this writes into data/raw, shared with
+    the CLI; on serverless it writes into /tmp (ephemeral)."""
+    name = Path(file.filename or "").name
+    if not name.lower().endswith((".xlsx", ".xls")):
+        return JSONResponse({"error": "expected an .xlsx file"}, status_code=400)
+    config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    (config.UPLOAD_DIR / name).write_bytes(await file.read())
+    return {"ok": True, "workbook": name}
 
 
 @app.post("/api/outcome")

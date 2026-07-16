@@ -57,11 +57,11 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # optional: add ANTHROPIC_API_KEY for LLM-written drafts
 
-# Drop Fleek's workbook in first (it's not committed — see Data below):
-#   data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx
-
 uvicorn server.app:app --port 8000    # then open http://localhost:8000
 ```
+
+Then **Upload .xlsx** in the app to load a workbook (or drop one into `data/raw/`
+first — it's not committed, see Data below — and it's picked up automatically).
 
 Everything happens in the browser: hit **Run · Accounts** to process the book,
 browse the ranked action queue, search / sort / filter by play, click any account
@@ -88,6 +88,28 @@ python cli.py run <workbook> --export queue.csv   # optional CSV dump of the act
 ```bash
 pip install -r requirements-dev.txt && python -m pytest -q   # 33 tests
 ```
+
+### Deploy to Vercel
+
+The same FastAPI app runs as a serverless function — `api/index.py` re-exports it
+and `vercel.json` rewrites every route to it, so there's no separate build:
+
+```bash
+vercel        # preview
+vercel --prod # production
+```
+
+Two things differ on a serverless host, both handled automatically:
+
+- **Storage is ephemeral.** The project filesystem is read-only except `/tmp`, so
+  the state DB and uploaded workbooks go there (`config.py` switches on the
+  `VERCEL` env var). A cold start wipes them — fine for a demo or single session.
+  To make the book durable, point `RETENTION_DB` at a hosted database and swap the
+  store backend; nothing else changes.
+- **No workbook is baked in** (Fleek's data stays out of git). Use **Upload .xlsx**
+  in the app to load one, then **Run**.
+
+Set `ANTHROPIC_API_KEY` in the Vercel project's env vars if you want LLM drafts.
 
 ## How it works
 
