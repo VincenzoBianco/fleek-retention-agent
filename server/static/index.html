@@ -4,38 +4,58 @@
 <title>Fleek Retention Agent</title>
 <style>
   :root{
-    --paper:#eef1f5; --ink:#171a19; --ink2:#3d423b; --muted:#6b7168; --line:#e2e4de; --card:#fff;
-    --managed:#b45309; --serve:#0f766e; --risk:#b91c1c; --key:#5b46c9; --brand:#0f7a5a;
-    /* dashboard look-and-feel: cool gray page, soft-shadowed white cards */
-    --d-bg:#eef1f5; --d-card:#fff; --d-line:#eceff3; --d-label:#8a909c; --d-value:#2b2f38;
-    --d-blue:#6f9fd8; --d-green:#3fa45b; --d-red:#d9584f;
+    /* ── Design system — single source of truth for the whole app ──────────
+       Cool-gray page, soft-shadowed white cards, one type scale. The Action
+       Queue and the Dashboard both read from these tokens; the legacy queue
+       names at the bottom are kept as aliases so older selectors inherit it. */
+    --bg:#eef1f5;          /* page background              */
+    --surface:#fff;        /* cards / panels               */
+    --surface-alt:#f7f9fb; /* subtle fills, table headers  */
+    --line:#eceff3;        /* hairlines                    */
+    --value:#2b2f38;       /* primary text / dark chrome   */
+    --label:#8a909c;       /* secondary text / labels      */
+    --ink2:#5b6270;        /* body-secondary text          */
+    --brand:#0f7a5a;       /* primary action + EV (money)  */
+    --blue:#6f9fd8; --green:#3fa45b; --red:#d9584f;
+    /* task-owner accents — the queue's primary axis */
+    --human:#475569; --human-bg:#eef2f7;
+    --agent:#7c3aed; --agent-bg:#f4effe;
+    /* play accents, aligned to the dashboard tier palette */
+    --managed:#c2610c; --serve:#0d9488; --risk:#b91c1c; --key:#4f46e5;
     --shadow:0 1px 3px rgba(16,24,40,.07),0 1px 2px rgba(16,24,40,.04);
+    --shadow-hover:0 4px 14px rgba(16,24,40,.10);
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,sans-serif;
+    /* legacy aliases → map old queue names onto the system above */
+    --paper:var(--bg); --card:var(--surface); --ink:var(--value); --muted:var(--label);
+    --d-bg:var(--bg); --d-card:var(--surface); --d-line:var(--line);
+    --d-label:var(--label); --d-value:var(--value);
+    --d-blue:var(--blue); --d-green:var(--green); --d-red:var(--red);
   }
   *{box-sizing:border-box;} html,body{margin:0;}
   body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;}
-  header{position:sticky;top:0;z-index:5;background:var(--ink);color:#eef0ea;padding:12px 20px;
+  header{position:sticky;top:0;z-index:5;background:var(--value);color:#eef1f5;padding:12px 20px;
     display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
   header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:-.01em;}
   header .sp{flex:1;}
-  header .wb{font-family:var(--mono);font-size:11px;color:#9aa093;}
-  button{font-family:var(--sans);font-size:12.5px;border:1px solid #3a3f38;background:#242822;color:#eef0ea;
-    padding:7px 12px;border-radius:7px;cursor:pointer;}
-  button:hover{background:#30352d;} button.primary{background:var(--brand);border-color:var(--brand);font-weight:600;}
+  header .wb{font-family:var(--mono);font-size:11px;color:#9aa3b0;}
+  button{font-family:var(--sans);font-size:12.5px;border:1px solid #3d4452;background:#383f4d;color:#eef1f5;
+    padding:7px 12px;border-radius:8px;cursor:pointer;transition:background .12s;}
+  button:hover{background:#454d5c;} button.primary{background:var(--brand);border-color:var(--brand);font-weight:600;}
+  button.primary:hover{background:#0d6b4f;}
   button:disabled{opacity:.5;cursor:wait;}
-  label.tog{font-size:12px;color:#c5c9c0;display:flex;align-items:center;gap:5px;cursor:pointer;}
+  label.tog{font-size:12px;color:#c3c8d2;display:flex;align-items:center;gap:5px;cursor:pointer;}
   .wrap{max-width:1180px;margin:0 auto;padding:20px;}
   .banner{border-radius:10px;padding:11px 16px;margin-bottom:10px;font-size:13px;}
   .b-conc{background:#fdf1e3;border:1px solid #eccfa6;color:#7c4a12;} .b-conc b{font-size:18px;color:var(--managed);}
-  .b-key{background:#f0eefb;border:1px solid #ccc3ef;color:#3f318f;} .b-key b{color:#2e2373;}
+  .b-key{background:var(--human-bg);border:1px solid #d5deea;color:#3b4a5e;} .b-key b{color:#2b3644;}
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px;}
-  .chip{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:12px;}
-  .chip b{font-size:16px;} .chip span{color:var(--muted);}
+  .chip{background:var(--surface);border-radius:10px;box-shadow:var(--shadow);padding:8px 12px;font-family:var(--mono);font-size:12px;}
+  .chip b{font-size:16px;} .chip span{color:var(--label);}
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
-  input[type=search]{font-family:var(--sans);font-size:13px;padding:7px 11px;border:1px solid var(--line);
-    border-radius:7px;min-width:220px;background:var(--card);}
-  select{font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--card);}
+  input[type=search]{font-family:var(--sans);font-size:13px;padding:7px 11px;border:1px solid #e2e6ec;
+    border-radius:8px;min-width:220px;background:var(--surface);color:var(--value);box-shadow:var(--shadow);}
+  select{font-size:13px;padding:7px 9px;border:1px solid #e2e6ec;border-radius:8px;background:var(--surface);color:var(--value);box-shadow:var(--shadow);}
   table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
   th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;}
   th{background:#fafbf9;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;}
@@ -43,42 +63,60 @@
   td.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;}
   .play{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;}
   .p-migrate_to_selfserve{background:#fdf1e3;color:var(--managed);} .p-grow_selfserve{background:#e7f6ef;color:var(--serve);}
-  .p-reengage{background:#fbe9e9;color:var(--risk);} .p-onboard{background:#efedfb;color:var(--key);}
+  .p-reengage{background:#fbe9e9;color:var(--risk);} .p-onboard{background:#eef2ff;color:var(--key);}
   .muted{color:var(--muted);font-size:11px;}
-  /* ---- action-queue cards ---- */
-  .queue{display:flex;flex-direction:column;gap:10px;}
-  .qcard{display:flex;gap:16px;background:var(--card);border:1px solid var(--line);border-radius:11px;
-    padding:14px 16px;cursor:pointer;transition:box-shadow .12s,border-color .12s;animation:cardin .22s ease;}
-  .qcard:hover{box-shadow:var(--shadow);border-color:#d3d6cf;}
+  /* ---- action queue: owner sections + cards ---- */
+  .queue{display:flex;flex-direction:column;gap:26px;}
+  .qsection{animation:cardin .2s ease;}
+  .qsec-head{display:flex;align-items:center;gap:12px;margin:0 2px 13px;}
+  .qsec-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:18px;flex-shrink:0;}
+  .qsec-head.human .qsec-icon{background:var(--human-bg);}
+  .qsec-head.agent .qsec-icon{background:var(--agent-bg);}
+  .qsec-meta{min-width:0;}
+  .qsec-title{font-size:14.5px;font-weight:700;letter-spacing:-.01em;color:var(--value);}
+  .qsec-head.human .qsec-title{color:var(--human);}
+  .qsec-head.agent .qsec-title{color:var(--agent);}
+  .qsec-sub{font-size:11.5px;color:var(--label);margin-top:1px;}
+  .qsec-stats{margin-left:auto;text-align:right;font-size:10px;color:var(--label);white-space:nowrap;
+    text-transform:uppercase;letter-spacing:.04em;}
+  .qsec-n{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--value);}
+  .qsec-ev{display:block;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--brand);
+    letter-spacing:0;text-transform:none;margin-top:2px;}
+  .qsec-cards{display:flex;flex-direction:column;gap:10px;}
+  .qcard{position:relative;display:flex;gap:16px;background:var(--surface);border-radius:13px;
+    box-shadow:var(--shadow);padding:15px 18px;border-left:3px solid var(--rail);cursor:pointer;
+    transition:box-shadow .14s,transform .14s;animation:cardin .22s ease;}
+  .qcard.human{--rail:var(--human);} .qcard.agent{--rail:var(--agent);}
+  .qcard:hover{box-shadow:var(--shadow-hover);transform:translateY(-1px);}
   @keyframes cardin{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
   .qmain{flex:1;min-width:0;}
   .qhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
-  .qid{font-family:var(--mono);font-weight:700;font-size:13.5px;color:var(--ink);}
-  .qseg{font-size:11px;color:var(--muted);font-family:var(--mono);}
-  .qby{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;font-family:var(--mono);
-    text-transform:uppercase;letter-spacing:.04em;}
-  .qby.ag{background:#efedfb;color:var(--key);} .qby.det{background:#eef1ee;color:var(--muted);}
-  .qhold{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;background:#fdf1e3;color:var(--managed);
-    font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;}
+  .qhead .sp1{flex:1;}
+  .qid{font-family:var(--mono);font-weight:700;font-size:13.5px;color:var(--value);}
+  .qseg{font-size:11px;color:var(--label);font-family:var(--mono);}
+  .qown{font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:var(--mono);
+    text-transform:uppercase;letter-spacing:.03em;display:inline-flex;align-items:center;gap:4px;}
+  .qown.human{background:var(--human-bg);color:var(--human);}
+  .qown.agent{background:var(--agent-bg);color:var(--agent);}
+  .qprov{font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px;font-family:var(--mono);
+    text-transform:uppercase;letter-spacing:.03em;background:var(--bg);color:var(--label);}
   .qact{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
-  .qfeat{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .qfeat{font-family:var(--mono);font-size:11px;color:var(--label);}
   .qactx{font-size:13px;color:var(--ink2);font-weight:500;}
   .qwhy{font-size:12.5px;color:var(--ink2);line-height:1.5;}
-  .qlbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+  .qlbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--label);
     margin-right:8px;vertical-align:1px;}
-  .qrat{margin-top:7px;padding-left:11px;border-left:2px solid var(--line);color:var(--muted);
+  .qrat{margin-top:7px;padding-left:11px;border-left:2px solid var(--line);color:var(--label);
     font-size:12px;line-height:1.55;font-style:italic;}
-  .qrail{width:148px;flex-shrink:0;border-left:1px solid var(--line);padding-left:16px;
-    display:flex;flex-direction:column;gap:10px;text-align:right;}
-  .qev .qevv{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--brand);
+  .qrail{width:150px;flex-shrink:0;border-left:1px solid var(--line);padding-left:16px;
+    display:flex;flex-direction:column;gap:12px;text-align:right;}
+  .qev .qevv{font-family:var(--mono);font-size:21px;font-weight:700;color:var(--brand);
     font-variant-numeric:tabular-nums;line-height:1;}
-  .qev .qevl,.qprize .qpl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;}
+  .qev .qevl,.qprize .qpl{font-size:9.5px;color:var(--label);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;}
   .qprize .qpv{font-family:var(--mono);font-size:14px;color:var(--ink2);font-variant-numeric:tabular-nums;}
-  .qchan{align-self:flex-end;font-family:var(--mono);font-size:10px;color:var(--muted);
-    background:#f4f6f3;border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.03em;}
   @media(max-width:640px){.qcard{flex-direction:column;}
-    .qrail{width:auto;border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:11px;
-      text-align:left;flex-direction:row;gap:22px;align-items:baseline;}.qchan{align-self:auto;}}
+    .qrail{width:auto;border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:12px;
+      text-align:left;flex-direction:row;gap:24px;align-items:baseline;}}
   /* ---- run spinner / progress footer ---- */
   .runfoot{display:flex;align-items:center;justify-content:center;gap:12px;padding:26px;
     color:var(--muted);font-size:13px;}
@@ -99,7 +137,12 @@
   .kv .k{color:var(--muted);} .kv .v{font-family:var(--mono);text-align:right;}
   .sig{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;}
   .sig span{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-family:var(--mono);font-size:11px;}
-  .box{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:13px;margin:12px 0;}
+  .box{background:var(--surface);border-radius:11px;box-shadow:var(--shadow);padding:14px;margin:12px 0;}
+  .dwn{font-size:12px;font-weight:600;padding:8px 12px;border-radius:10px;margin:10px 0 4px;
+    display:flex;align-items:center;gap:7px;}
+  .dwn span{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;opacity:.8;margin-left:auto;}
+  .dwn.human{background:var(--human-bg);color:var(--human);}
+  .dwn.agent{background:var(--agent-bg);color:var(--agent);}
   .box .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
   .draft{font-size:13.5px;color:#2c322b;white-space:pre-wrap;}
   .oc{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
@@ -111,8 +154,8 @@
     padding:1px 6px;border-radius:5px;margin-left:6px;}
   /* ---- tabs ---- */
   .tabs{display:flex;gap:4px;}
-  .tab{background:transparent;border:1px solid transparent;color:#9aa093;padding:6px 13px;border-radius:7px;font-weight:600;}
-  .tab:hover{background:#242822;color:#eef0ea;}
+  .tab{background:transparent;border:1px solid transparent;color:#9aa3b0;padding:6px 13px;border-radius:8px;font-weight:600;}
+  .tab:hover{background:#383f4d;color:#eef1f5;}
   .tab.active{background:var(--brand);border-color:var(--brand);color:#fff;}
   /* ---- dashboard: page + controls ---- */
   #view-dashboard{background:var(--d-bg);}
@@ -314,6 +357,12 @@ function renderPlayFilter(){
   const plays=[...new Set((STATE.queue||[]).map(r=>r.play))];
   sel.innerHTML='<option value="">All plays</option>'+plays.map(p=>`<option ${p===cur?'selected':''}>${p}</option>`).join('');
 }
+// Task owner = who executes the outreach. A call needs a person (AM); a message
+// (WhatsApp / in-app nudge) is drafted and can be auto-sent by the messaging agent.
+const OWNER=r=>(r.channel==='call')?'human':'agent';
+const CHAN_LAB={call:'call',whatsapp:'WhatsApp',in_app:'in-app'};
+const sumEV=rows=>rows.reduce((s,r)=>s+(r.expected_value||0),0);
+
 function render(){
   const q=(document.getElementById('q').value||'').toLowerCase();
   const pf=document.getElementById('playf').value;
@@ -321,21 +370,46 @@ function render(){
     (!q||(r.account_id+' '+(r.reason||'')+' '+(r.agent_rationale||'')).toLowerCase().includes(q)));
   rows.sort((a,b)=>{const x=a[SORT]??-Infinity,y=b[SORT]??-Infinity;return (x>y?1:x<y?-1:0)*DIR;});
   document.getElementById('count').textContent=rows.length+' shown';
-  document.getElementById('rows').innerHTML=rows.map(cardHTML).join('');
+  const host=document.getElementById('rows');
+  if(!rows.length){
+    host.innerHTML=((STATE&&STATE.queue)||[]).length?'<div class="empty">No tasks match this filter.</div>':'';
+    renderFoot();return;
+  }
+  host.innerHTML=[
+    sectionHTML('human','🧑','Human','needs a person — calls & high-touch handovers',
+                rows.filter(r=>OWNER(r)==='human')),
+    sectionHTML('agent','🤖','Agent','ready to auto-send — drafted messages & in-app nudges',
+                rows.filter(r=>OWNER(r)==='agent')),
+  ].join('');
   renderFoot();
+}
+function sectionHTML(owner,icon,label,sub,rows){
+  if(!rows.length)return '';
+  return `<section class="qsection">
+    <div class="qsec-head ${owner}">
+      <div class="qsec-icon">${icon}</div>
+      <div class="qsec-meta"><div class="qsec-title">${label}</div><div class="qsec-sub">${sub}</div></div>
+      <div class="qsec-stats"><span class="qsec-n">${rows.length}</span> task${rows.length!==1?'s':''}
+        <span class="qsec-ev">${gbp(sumEV(rows))} EV</span></div>
+    </div>
+    <div class="qsec-cards">${rows.map(cardHTML).join('')}</div>
+  </section>`;
 }
 function cardHTML(r){
   const play=(r.play||'').replace(/_/g,' ');
-  const agent=r.decided_by==='agent';
+  const owner=OWNER(r), ai=r.decided_by==='agent';
+  const chan=CHAN_LAB[r.channel]||r.channel||'';
   const why=r.reason||'';
   // Show the agent's fuller rationale beneath the one-line reason when it adds detail.
   const rat=(r.agent_rationale&&r.agent_rationale.trim()&&r.agent_rationale.trim()!==why.trim())?r.agent_rationale:'';
-  return `<div class="qcard" onclick="open_('${r.account_id}')">
+  return `<div class="qcard ${owner}" onclick="open_('${r.account_id}')">
     <div class="qmain">
       <div class="qhead">
         <span class="qid">${esc(r.account_id)}</span>
         ${r.segment?`<span class="qseg">${esc(r.segment)}${r.health?' · '+esc(r.health):''}</span>`:''}
-        <span class="qby ${agent?'ag':'det'}">${agent?'⚡ agent':'rules'}</span>
+        <span class="sp1"></span>
+        ${chan?`<span class="qown ${owner}">${owner==='human'?'🧑':'🤖'} ${esc(chan)}</span>`:''}
+        <span class="qprov" title="how this decision was made">${ai?'⚡ AI-decided':'rule-based'}</span>
       </div>
       <div class="qact">
         ${r.play?`<span class="play p-${r.play}">${esc(play)}</span>`:''}
@@ -348,7 +422,6 @@ function cardHTML(r){
     <div class="qrail">
       <div class="qev"><div class="qevv">${gbp(r.expected_value)}</div><div class="qevl">expected value</div></div>
       <div class="qprize"><div class="qpv">${gbp(r.gmv_at_stake)}</div><div class="qpl">${esc(r.prize_type||'prize')}</div></div>
-      ${r.channel?`<div class="qchan">${esc(r.channel.replace(/_/g,' '))}</div>`:''}
     </div>
   </div>`;
 }
@@ -375,12 +448,17 @@ async function open_(aid){
   const a=await (await fetch('/api/account/'+aid)).json();
   if(!a||a.error){toast(RUNNING?'Still evaluating '+aid+' — opens once the run finishes':'Account not found');return;}
   const d=document.getElementById('drawer');
+  const owner=OWNER(a), ai=a.decided_by==='agent';
+  const chan=CHAN_LAB[a.channel]||a.channel||'';
   const sig=[['GMV 6mo',gbp(a.gmv_total)],['tier',a.transaction_mode||'—'],['persona',a.persona||'—'],['region',a.region||'—']];
   d.innerHTML=`
     <button onclick="closeDrawer()" style="float:right">✕</button>
-    <h2>${a.account_id}${a.holdout?'<span class="flag">HOLDOUT</span>':''}
-      <span class="qby ${a.decided_by==='agent'?'ag':'det'}" style="float:none;margin-left:6px">${a.decided_by==='agent'?'⚡ agent':'rules'}</span></h2>
-    <div class="muted">${a.segment} · ${a.health} · ${a.play?a.play.replace(/_/g,' '):'no action'}</div>
+    <h2>${a.account_id}${a.holdout?'<span class="flag">HOLDOUT</span>':''}</h2>
+    <div class="muted">${a.segment} · ${a.health} · ${a.play?a.play.replace(/_/g,' '):'no action'}
+      · <span class="qprov">${ai?'⚡ AI-decided':'rule-based'}</span></div>
+    ${a.play&&chan?`<div class="dwn ${owner}">${owner==='human'
+      ?'🧑 Human task — an AM makes the call'
+      :'🤖 Agent task — drafted, ready to auto-send'}<span>${esc(chan)}</span></div>`:''}
     <div class="sig">${sig.map(s=>`<span>${s[0]}: ${s[1]}</span>`).join('')}</div>
     <div class="kv">
       <div class="k">Expected value</div><div class="v">${gbp(a.expected_value)}</div>
