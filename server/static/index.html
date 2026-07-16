@@ -52,6 +52,13 @@
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 16px;}
   .chip{background:var(--surface);border-radius:10px;box-shadow:var(--shadow);padding:8px 12px;font-family:var(--mono);font-size:12px;}
   .chip b{font-size:16px;} .chip span{color:var(--label);}
+  .runbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    background:var(--surface);border:1px solid #e2e6ec;border-radius:12px;box-shadow:var(--shadow);
+    padding:16px 18px;margin-bottom:16px;}
+  .runbar-title{font-family:var(--sans);font-size:16px;font-weight:600;color:var(--value);}
+  .runbar-sub{font-size:12.5px;color:var(--label);margin-top:2px;}
+  .runbar-actions{display:flex;gap:10px;flex-wrap:wrap;}
+  .runbar-actions button{font-size:13.5px;padding:10px 18px;border-radius:9px;}
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
   input[type=search]{font-family:var(--sans);font-size:13px;padding:7px 11px;border:1px solid #e2e6ec;
     border-radius:8px;min-width:220px;background:var(--surface);color:var(--value);box-shadow:var(--shadow);}
@@ -348,7 +355,7 @@
   <h1>Fleek Retention Agent</h1>
   <div class="tabs">
     <button class="tab active" data-t="home" onclick="showTab('home')">Overview</button>
-    <button class="tab" data-t="queue" onclick="showTab('queue')">Action Queue</button>
+    <button class="tab" data-t="queue" onclick="showTab('queue')">Action</button>
     <button class="tab" data-t="dashboard" onclick="showTab('dashboard')">Dashboard</button>
     <button class="tab" data-t="plays" onclick="showTab('plays')">Plays</button>
   </div>
@@ -357,8 +364,6 @@
   <span id="llmstatus" class="wb"></span>
   <input type="file" id="file" accept=".xlsx" style="display:none" onchange="upload()">
   <button onclick="document.getElementById('file').click()">Upload .xlsx</button>
-  <button onclick="run('Accounts')">Run · Accounts</button>
-  <button onclick="run('new_accounts')">Run · new_accounts</button>
   <a href="/api/queue.csv"><button>Download CSV</button></a>
   <button onclick="reset()">Reset</button>
 </header>
@@ -423,6 +428,16 @@
 </div>
 
 <div class="wrap" id="view-queue" style="display:none">
+  <div class="runbar">
+    <div class="runbar-lead">
+      <div class="runbar-title">Run the agent</div>
+      <div class="runbar-sub">Decide the next best action for every account, then draft the outreach.</div>
+    </div>
+    <div class="runbar-actions">
+      <button class="primary" onclick="run('Accounts')">Run · Accounts</button>
+      <button class="primary" onclick="run('new_accounts')">Run · new_accounts</button>
+    </div>
+  </div>
   <div id="banners"></div>
   <div class="chips" id="chips"></div>
   <div class="toolbar">
@@ -516,7 +531,7 @@ async function load(){
   STATE=await (await fetch('/api/state')).json();
   document.getElementById('wb').textContent=STATE.workbook?('data/raw/'+STATE.workbook):'no workbook in data/raw';
   const ls=document.getElementById('llmstatus');
-  if(STATE.llm_available){ls.textContent='● LLM: ready — agent decides & drafts';ls.style.color='#4ade80';}
+  if(STATE.llm_available){ls.textContent='● API connected';ls.style.color='#4ade80';}
   else{ls.textContent='○ LLM: no key — deterministic + templated drafts';ls.style.color='#c98a3a';}
   renderBanners(); renderChips(); renderPlayFilter(); render();
 }
@@ -702,7 +717,7 @@ function closeDrawer(){document.getElementById('ov').classList.remove('open');do
 
 async function upload(){
   const inp=document.getElementById('file'); const f=inp.files[0]; if(!f)return;
-  const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
+  const btns=document.querySelectorAll('header button, .runbar button');btns.forEach(b=>b.disabled=true);
   toast('Uploading '+f.name+'…');
   try{
     const fd=new FormData(); fd.append('file',f);
@@ -714,7 +729,7 @@ async function upload(){
   finally{inp.value=''; btns.forEach(b=>b.disabled=false);}   // never leave the UI locked
 }
 async function run(sheet){
-  const btns=document.querySelectorAll('header button');btns.forEach(b=>b.disabled=true);
+  const btns=document.querySelectorAll('header button, .runbar button');btns.forEach(b=>b.disabled=true);
   showTab('queue');                         // make the table visible while it fills
   RUNNING=true; PROG={done:0,total:0,found:0}; LIVE={};
   // Seed the live view with the current queue so a re-run keeps existing rows and
