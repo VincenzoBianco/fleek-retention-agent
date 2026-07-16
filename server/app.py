@@ -23,7 +23,7 @@ import pandas as pd
 from fastapi import Body, FastAPI, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
-from retention_agent import config, ingest
+from retention_agent import config, ingest, plays
 from retention_agent.llm import LLM
 from retention_agent.models import Account, Decision
 from retention_agent.orchestrator import run as run_loop
@@ -37,6 +37,21 @@ STATIC = Path(__file__).parent / "static"
 MONTH_LABELS = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb"]
 # The two datasets summarised on the dashboard; the "Readme" tab is skipped.
 DATASET_SHEETS = ["Accounts", "new_accounts"]
+
+# The markdown "skills" the Plays tab visualises and edits. This is a fixed
+# whitelist (key → path) so a save can never write outside the two policy dirs —
+# no path traversal from the client. Plays carry per-account decision logic;
+# the two guides carry the cross-book reasoning and strategy the agent reads.
+def _skill_registry() -> dict[str, dict]:
+    reg: dict[str, dict] = {}
+    for md in sorted(config.PLAYS_DIR.glob("*.md")):
+        reg["plays/" + md.stem] = {"path": md, "kind": "play"}
+    for stem, title in (("analyst_guide", "Analyst guide — how to reason"),
+                        ("portfolio_overview", "Portfolio overview — strategy & facts")):
+        p = config.DATA_DIR / (stem + ".md")
+        if p.exists():
+            reg[stem] = {"path": p, "kind": "guide", "title": title}
+    return reg
 
 
 def _store() -> Store:
@@ -124,6 +139,47 @@ def dashboard():
             continue
         out["sheets"][sheet] = _dataset_records(df)
     return out
+
+
+@app.get("/api/skills")
+def skills():
+    """The editable markdown behind every decision — the four plays plus the two
+    strategy guides. Plays are returned with their frontmatter parsed out (channel,
+    priority metric, the section headings) so the tab can render a plain-language
+    card, and with the raw source so it can be edited in place."""
+    out = []
+    for key, meta in _skill_registry().items():
+        text = meta["path"].read_text()
+        fm, body = plays._split_frontmatter(text)
+        out.append({
+            "key": key,
+            "kind": meta["kind"],
+            "title": meta.get("title") or fm.get("label") or fm.get("name") or key,
+            "path": meta["path"].relative_to(config.ROOT).as_posix(),
+            "frontmatter": fm,
+            "body": body.strip(),
+            "content": text,
+        })
+    return {"skills": out}
+
+
+@app.post("/api/skills/{key:path}")
+def save_skill(key: str, payload: dict = Body(...)):
+    """Persist an edited skill back to disk and drop the play cache so the next run
+    reasons over the new text. The key must be one we handed out — anything else is
+    rejected, so this can't be used to write arbitrary files."""
+    meta = _skill_registry().get(key)
+    if not meta:
+        return JSONResponse({"error": "unknown skill"}, status_code=404)
+    content = payload.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return JSONResponse({"error": "content required"}, status_code=400)
+    try:
+        meta["path"].write_text(content)
+    except OSError as e:  # read-only fs (serverless) or perms — surface, don't 500
+        return JSONResponse({"error": f"could not write: {e}"}, status_code=400)
+    plays.load_plays.cache_clear()   # next Analyst / fallback re-reads the file
+    return {"ok": True, "key": key}
 
 
 @app.get("/api/state")

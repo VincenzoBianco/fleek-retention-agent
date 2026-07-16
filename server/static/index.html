@@ -195,7 +195,38 @@
   .dqtile .n{font-size:24px;font-weight:700;color:var(--d-value);}
   .dqtile.ok .n{color:var(--d-green);}
   .dqtile .l{font-size:11.5px;color:var(--d-label);margin-top:3px;}
-  @media(max-width:720px){.ddwrap{grid-template-columns:1fr;}.lboards{grid-template-columns:1fr;}.rbar{grid-template-columns:90px 1fr auto;}}
+  /* ---- plays tab ---- */
+  #view-plays{background:var(--d-bg);}
+  .pcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:16px;align-items:start;}
+  .pcard{background:var(--d-card);border-radius:13px;padding:18px 20px;box-shadow:var(--shadow);border-top:3px solid var(--d-blue);}
+  .pcard.p-migrate_to_selfserve{border-top-color:var(--managed);} .pcard.p-grow_selfserve{border-top-color:var(--serve);}
+  .pcard.p-reengage{border-top-color:var(--risk);} .pcard.p-onboard{border-top-color:var(--key);}
+  .pchead{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px;}
+  .pctitle{font-size:16px;font-weight:700;color:var(--d-value);letter-spacing:-.01em;flex:1;}
+  .pckey{font-family:var(--mono);font-size:11px;color:var(--d-label);margin-bottom:12px;}
+  .pcedit{background:#f2f5f9;border:1px solid #e2e6ec;color:#5b6270;padding:5px 12px;border-radius:7px;font-weight:600;flex-shrink:0;}
+  .pcedit:hover{background:#e7ecf2;color:var(--d-value);}
+  .pmeta{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;}
+  .pmeta .m{background:#f4f7fb;border:1px solid #e3e9f1;border-radius:7px;padding:4px 10px;font-size:11.5px;color:#5b6472;}
+  .pmeta .m b{color:var(--d-value);font-weight:600;} .pmeta .m .mk{color:var(--d-label);font-size:10px;text-transform:uppercase;letter-spacing:.04em;margin-right:5px;}
+  .prose{font-size:13px;color:var(--ink2);line-height:1.6;}
+  .prose h4{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--d-label);margin:16px 0 6px;}
+  .prose h4:first-child{margin-top:0;}
+  .prose p{margin:0 0 8px;} .prose ul,.prose ol{margin:0 0 8px;padding-left:20px;} .prose li{margin:3px 0;}
+  .prose code{font-family:var(--mono);font-size:12px;background:#f2f5f9;padding:1px 5px;border-radius:4px;color:#5b46c9;}
+  .prose strong{color:var(--d-value);font-weight:600;}
+  .peditor{display:flex;flex-direction:column;gap:10px;}
+  .peditor textarea{width:100%;min-height:340px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
+    border:1px solid #e2e6ec;border-radius:9px;padding:12px 14px;resize:vertical;color:var(--d-value);background:#fbfcfe;}
+  .peditor textarea:focus{outline:none;border-color:var(--d-blue);box-shadow:0 0 0 3px rgba(111,159,216,.15);}
+  .peditrow{display:flex;gap:9px;align-items:center;}
+  .peditrow .sp{flex:1;}
+  .psave{background:var(--brand);border:1px solid var(--brand);color:#fff;font-weight:600;padding:7px 16px;border-radius:7px;}
+  .psave:hover{background:#0c6449;} .psave:disabled{opacity:.5;}
+  .pcancel{background:#f2f5f9;border:1px solid #e2e6ec;color:#5b6270;padding:7px 14px;border-radius:7px;}
+  .pcancel:hover{background:#e7ecf2;}
+  @media(max-width:720px){.ddwrap{grid-template-columns:1fr;}.lboards{grid-template-columns:1fr;}.rbar{grid-template-columns:90px 1fr auto;}
+    .pcards{grid-template-columns:1fr;}}
 </style></head>
 <body>
 <header>
@@ -203,6 +234,7 @@
   <div class="tabs">
     <button class="tab active" data-t="queue" onclick="showTab('queue')">Action Queue</button>
     <button class="tab" data-t="dashboard" onclick="showTab('dashboard')">Dashboard</button>
+    <button class="tab" data-t="plays" onclick="showTab('plays')">Plays</button>
   </div>
   <span class="wb" id="wb"></span>
   <span class="sp"></span>
@@ -271,6 +303,17 @@
     </div>
     <div class="ddcharts" id="ddCharts"></div>
   </div>
+</div>
+
+<div class="wrap" id="view-plays" style="display:none">
+  <div class="dtitle">Plays &amp; instructions <span>the markdown the agent reasons over — edit any of it in place</span></div>
+  <div class="note" id="playPrec"></div>
+
+  <h3 class="sec">Plays <span class="muted">— one next-best-action per account, chosen by behaviour</span></h3>
+  <div class="pcards" id="playCards"></div>
+
+  <h3 class="sec">Strategy guides <span class="muted">— the cross-book reasoning &amp; strategy behind the calls</span></h3>
+  <div class="pcards" id="guideCards"></div>
 </div>
 
 <div class="ctip" id="ctip"></div>
@@ -511,8 +554,10 @@ const MET={
 async function showTab(t){
   document.getElementById('view-queue').style.display=t==='queue'?'':'none';
   document.getElementById('view-dashboard').style.display=t==='dashboard'?'':'none';
+  document.getElementById('view-plays').style.display=t==='plays'?'':'none';
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
   if(t==='dashboard')await loadDash();
+  if(t==='plays')await loadPlaysTab();
 }
 async function loadDash(){
   if(!DASH){
@@ -892,6 +937,123 @@ function renderDeepDive(){
         xLabels:DASH.months,yfmt:m.fmt,neg:m.neg,W:760,H:250})}</div>`;
   }).join('')
    +`<div class="note">The workbook's only monthly series is GMV, so all four trend metrics are GMV-derived. Everything else (orders, AOV, PDP views, chat, …) is a 6-month total and shown in the stats panel on the left, not as a time series.</div>`;
+}
+
+/* ======================= PLAYS ======================= */
+let SKILLS=null, EDITING=null;   // EDITING = key of the card currently in edit mode
+
+// Precedence is encoded in plays.py; state it here so the tab explains how the
+// four plays relate rather than just listing them.
+const PLAY_PRECEDENCE=`<b>How the plays relate:</b> for an established account the order is
+  <b>re-engage → migrate → grow → leave alone</b> — stabilise a churning account before trying to
+  migrate or upsell it. <b>Onboard</b> jumps the queue for young accounts (under ~5 months): you
+  activate a new account before you migrate or grow it. Key accounts (≥10% of book GMV) and the
+  holdout are deterministic guardrails handled outside the plays.`;
+
+// Tiny markdown → HTML for the play bodies (headings, bold, code, lists). Not a
+// general renderer — just what the skill docs use — and it escapes first so the
+// content can't inject markup.
+function mdToHtml(md){
+  const inline=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`([^`]+?)`/g,'<code>$1</code>');
+  const lines=(md||'').split('\n');
+  let html='',list=null,para=[];
+  const flushP=()=>{if(para.length){html+='<p>'+inline(para.join(' '))+'</p>';para=[];}};
+  const flushL=()=>{if(list){html+='</'+list+'>';list=null;}};
+  for(const raw of lines){
+    const ln=raw.trim();
+    const h=ln.match(/^#{2,4}\s+(.*)$/);
+    const ul=ln.match(/^[-*]\s+(.*)$/);
+    const ol=ln.match(/^\d+\.\s+(.*)$/);
+    if(h){flushP();flushL();html+='<h4>'+inline(h[1])+'</h4>';}
+    else if(ul){flushP();if(list!=='ul'){flushL();list='ul';html+='<ul>';}html+='<li>'+inline(ul[1])+'</li>';}
+    else if(ol){flushP();if(list!=='ol'){flushL();list='ol';html+='<ol>';}html+='<li>'+inline(ol[1])+'</li>';}
+    else if(!ln){flushP();flushL();}
+    else{if(list)flushL();para.push(ln);}
+  }
+  flushP();flushL();
+  return html;
+}
+
+async function loadPlaysTab(){
+  if(!SKILLS){
+    const r=await (await fetch('/api/skills')).json();
+    SKILLS=r.skills||[];
+  }
+  document.getElementById('playPrec').innerHTML=PLAY_PRECEDENCE;
+  renderSkills();
+}
+function renderSkills(){
+  const plays=SKILLS.filter(s=>s.kind==='play'), guides=SKILLS.filter(s=>s.kind==='guide');
+  document.getElementById('playCards').innerHTML=plays.map(skillCard).join('')
+    ||'<div class="note">No plays found in data/plays/.</div>';
+  document.getElementById('guideCards').innerHTML=guides.map(skillCard).join('')
+    ||'<div class="note">No strategy guides found.</div>';
+}
+// Frontmatter → labelled meta chips, only for the keys worth surfacing.
+function metaChips(fm){
+  const rows=[['problem','Problem'],['channel','Channel'],['channel_warm','Channel · warm'],
+    ['channel_cold','Channel · cold'],['priority_metric','Ranked by']];
+  return rows.filter(([k])=>fm&&fm[k]).map(([k,lab])=>
+    `<span class="m"><span class="mk">${lab}</span><b>${esc((''+fm[k]).replace(/_/g,' '))}</b></span>`).join('');
+}
+function skillCard(s){
+  const pcls=s.kind==='play'?('p-'+esc(s.frontmatter.name||'')):'';
+  if(EDITING===s.key){
+    return `<div class="pcard ${pcls}" id="card-${cssId(s.key)}">
+      <div class="pchead"><div class="pctitle">${esc(s.title)}</div></div>
+      <div class="pckey">${esc(s.path)}</div>
+      <div class="peditor">
+        <textarea id="ta-${cssId(s.key)}">${esc(s.content)}</textarea>
+        <div class="peditrow">
+          <span class="muted">Markdown — frontmatter (between the <code>---</code> lines) plus guidance.</span>
+          <span class="sp"></span>
+          <button class="pcancel" onclick="cancelEdit()">Cancel</button>
+          <button class="psave" id="save-${cssId(s.key)}" onclick="saveSkill('${s.key}')">Save</button>
+        </div>
+      </div></div>`;
+  }
+  const meta=s.kind==='play'?`<div class="pmeta">${metaChips(s.frontmatter)}</div>`:'';
+  return `<div class="pcard ${pcls}" id="card-${cssId(s.key)}">
+    <div class="pchead">
+      <div class="pctitle">${esc(s.title)}</div>
+      <button class="pcedit" onclick="editSkill('${s.key}')">Edit</button>
+    </div>
+    <div class="pckey">${esc(s.path)}</div>
+    ${meta}
+    <div class="prose">${mdToHtml(s.body)}</div>
+  </div>`;
+}
+const cssId=k=>k.replace(/[^a-z0-9]/gi,'_');
+function editSkill(key){EDITING=key;renderSkills();
+  const ta=document.getElementById('ta-'+cssId(key));if(ta)ta.focus();}
+function cancelEdit(){EDITING=null;renderSkills();}
+async function saveSkill(key){
+  const ta=document.getElementById('ta-'+cssId(key)),btn=document.getElementById('save-'+cssId(key));
+  const content=ta.value;
+  btn.disabled=true;btn.textContent='Saving…';
+  try{
+    const resp=await fetch('/api/skills/'+key,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({content})});
+    const r=await resp.json().catch(()=>({}));
+    if(!resp.ok||r.error){toast('Save failed: '+(r.error||('HTTP '+resp.status)));
+      btn.disabled=false;btn.textContent='Save';return;}
+    // Re-parse locally so the card reflects the edit without a full refetch.
+    const s=SKILLS.find(x=>x.key===key);
+    if(s){s.content=content;const p=splitFrontmatter(content);s.frontmatter=p.fm;s.body=p.body;
+      if(s.kind==='play')s.title=p.fm.label||p.fm.name||s.title;}
+    EDITING=null;renderSkills();toast('Saved '+key+' — next run reads the new text');
+  }catch(err){toast('Save failed: '+err);btn.disabled=false;btn.textContent='Save';}
+}
+// Mirror of plays._split_frontmatter for the local re-parse after a save (values
+// are read as plain strings — enough for the meta chips and title).
+function splitFrontmatter(text){
+  if(!text.startsWith('---'))return {fm:{},body:text};
+  const parts=text.split('---');
+  const fm={};
+  (parts[1]||'').split('\n').forEach(l=>{const i=l.indexOf(':');
+    if(i>0)fm[l.slice(0,i).trim()]=l.slice(i+1).trim();});
+  return {fm,body:parts.slice(2).join('---').trim()};
 }
 
 load();
