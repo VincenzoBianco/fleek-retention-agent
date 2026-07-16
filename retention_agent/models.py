@@ -79,6 +79,9 @@ class Decision(BaseModel):
     channel: Optional[str] = None        # whatsapp | in_app | call
     holdout: bool = False                # control group: intended play recorded, no outreach fires
     fingerprint: str = ""                # account fingerprint this decision was made against
+    # --- provenance: which engine made this call ---
+    decided_by: str = "deterministic"    # "agent" | "deterministic" (the fallback engine)
+    agent_rationale: Optional[str] = None  # the agent's fuller reasoning (close calls, departures)
 
 
 class RunReport(BaseModel):
@@ -92,6 +95,7 @@ class RunReport(BaseModel):
     n_unchanged_skipped: int = 0
     n_stale_skipped: int = 0             # differing but from an older source — not overwritten
     n_actions: int = 0
+    n_agent_decided: int = 0             # of new/changed, how many the agent decided (vs deterministic fallback)
     n_holdout: int = 0                   # control-group accounts (intended play, no outreach)
     segment_counts: dict[str, int] = Field(default_factory=dict)
     play_counts: dict[str, int] = Field(default_factory=dict)

@@ -7,6 +7,14 @@ message or call note so an AM — or an agent — can just act. Re-run it agains
 new batch and it updates the book in place, without reprocessing or duplicating
 anything it has already seen.
 
+The decision is made by a **per-account analyst agent**: it reasons over
+deterministic *tools* (the signals) and written *strategy* (the portfolio doc) to
+pick the segment, health, play and feature for each account. The deterministic
+engine that used to hard-code those calls is still here — as the agent's tools and
+its exact fallback when no API key is present — so a run always produces a full,
+valid, tested result even with the model off. See
+[the decision layer](#the-decision-layer-an-account-analyst-agent).
+
 It's a **process, not a dashboard**: point it at the same file twice and the
 second run does nothing; drop in `new_accounts` and only the genuinely new or
 changed accounts are touched.
@@ -55,7 +63,7 @@ stabilise the churning, activate the new, wean the reliant, grow the healthy.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # optional: add ANTHROPIC_API_KEY for LLM-written drafts
+cp .env.example .env            # add ANTHROPIC_API_KEY to enable the agent (+ LLM drafts)
 
 # Drop Fleek's workbook in first (it's not committed — see Data below):
 #   data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx
@@ -69,8 +77,10 @@ for its signals, reason, next best action and drafted message, then **Run ·
 new_accounts** to prove it picks up the batch without duplicating. **Log outcomes**
 (Responded / Converted) on an account and they feed the learning loop. There are
 no static files — the SQLite store is the source of truth and the app renders it
-live. Tick **use LLM drafts** to have Claude write the outreach (needs
-`ANTHROPIC_API_KEY`); off, drafts are templated but real.
+live. With an `ANTHROPIC_API_KEY` present the **account-analyst agent** decides
+each new/changed account (the run output shows `agent decided N/M`); without one it
+falls back to the deterministic engine. Tick **use LLM drafts** to also have Claude
+write the outreach; off, drafts are templated but real.
 
 ### Headless / cron (same engine, no browser)
 
@@ -82,11 +92,12 @@ python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx   
 python cli.py run data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx --sheet new_accounts   # 45 new + 5 changed
 python cli.py status
 python cli.py calibrate data/raw/Fleek_-_Retention_Case_Study_-_Portfolio_Data.xlsx   # empirical priors + tiers
+python cli.py run <workbook> --no-agent            # force the deterministic engine (no LLM decisions)
 python cli.py run <workbook> --export queue.csv   # optional CSV dump of the action queue
 ```
 
 ```bash
-pip install -r requirements-dev.txt && python -m pytest -q   # 33 tests
+pip install -r requirements-dev.txt && python -m pytest -q   # 41 tests
 ```
 
 ## How it works
@@ -99,8 +110,8 @@ flowchart LR
     I["ingest + clean<br/>recompute reliance & momentum,<br/>fill blanks, flag dupes,<br/>fingerprint each account"]
     I --> D{"diff vs stored<br/>fingerprints"}
     D -->|unchanged| SKIP["skip — keep prior decision"]
-    D -->|new / changed| SEG["segment from behaviour"]
-    SEG --> DEC["pick a play + next best action<br/>(reengage > migrate > grow)"]
+    D -->|new / changed| SEG["gather signals (deterministic tools)"]
+    SEG --> DEC["account-analyst agent decides<br/>segment · health · play · feature<br/>(deterministic fallback if no key)"]
     DEC --> DR["draft message / call note"]
     DR --> ST[("SQLite state<br/>one row per account")]
     SKIP --> ST
@@ -112,10 +123,11 @@ flowchart LR
 ```
 
 **Where a person or agent steps in.** Everything in the `AUTO` box runs with no
-human: cleaning, segmentation, the play decision, and the draft. A person (or a
-messaging agent) only enters at the end — to send the drafted message, make the
-call, or tweak a draft. The `reason` on every row is there so that hand-off is a
-5-second read, not a re-investigation. The dashed line is the learning loop, and
+human: cleaning, gathering signals, the play decision (now made by the analyst
+agent), and the draft. A person (or a messaging agent) only enters at the end — to
+send the drafted message, make the call, or tweak a draft. The `reason` on every
+row is there so that hand-off is a 5-second read, not a re-investigation; when the
+agent decided, `agent_rationale` holds its fuller reasoning. The dashed line is the learning loop, and
 it's **closed**: the `outcomes` table logs whether each action landed, a ~10%
 deterministic **holdout** (control group, no outreach) gives a baseline to
 measure against, and at the start of every run [`learning.apply`](retention_agent/learning.py)
@@ -130,19 +142,57 @@ retention_agent/
   models.py        pydantic domain types (Account, Decision, RunReport)
   ingest.py        load + clean (vectorised pandas); recompute the signals we
                    don't trust; fingerprint each account
-  segment.py       behavioural segmentation + health overlay (label-blind)
-  plays.py         which play fires, the NBA, the feature decision tree, EV prize
+  segment.py       behavioural segmentation + health overlay (the fallback engine)
+  plays.py         which play fires, the NBA, the feature tree (the fallback engine)
+  ev.py            the £ maths (prizes + risk-adjusted EV) — one source of truth,
+                   shared by the fallback and the agent's expected_value tool
+  tools.py         the deterministic computations exposed as agent tools (facts,
+                   not verdicts) + their Anthropic tool schemas
+  agent.py         the account-analyst agent: reasons over tools + skills to decide,
+                   sizes money via ev.py, applies guardrails, falls back on failure
   analysis.py      calibrate(): derive the growth priors from the book itself
   draft.py         templated drafts (default) + optional LLM rewrite
-  llm.py           thin Anthropic wrapper; degrades to None (never throws)
+  llm.py           thin Anthropic wrapper: complete() + run_agent() tool loop;
+                   degrades to None (never throws)
   store.py         SQLite state + new/changed/unchanged/stale diff + outcomes
   learning.py      close the loop: blend EV priors toward measured outcomes
   orchestrator.py  the loop: ingest -> diff -> decide -> draft -> persist -> report
   report.py        action-queue CSV export (served by the app / --export)
 cli.py             run / status / calibrate / outcome / reset
 server/app.py      optional FastAPI dashboard over the same store + orchestrator
-data/plays/        the plays as markdown skills (edit behaviour here)
+data/plays/               the plays as markdown skills (edit behaviour here)
+data/portfolio_overview.md  book-level strategy the agent reads on every account
+data/analyst_guide.md       the agent's reasoning contract (how to think)
 ```
+
+### The decision layer: an account-analyst agent
+
+The per-account decision is made by an LLM agent (`agent.Analyst`), invoked on one
+account at a time. The split that makes it agentic rather than a rubber stamp:
+
+- **Tools compute quantities** — [tools.py](retention_agent/tools.py) exposes
+  `account_signals`, `trend_signals`, `expected_value`, `peer_benchmarks`, and
+  `portfolio_context`. They return raw numbers and the config thresholds *as
+  reference*, never a categorical verdict.
+- **Skills carry policy** — [data/analyst_guide.md](data/analyst_guide.md) (how to
+  reason) and [data/portfolio_overview.md](data/portfolio_overview.md) (the book
+  strategy and the key data facts). Editing the strategy doc re-steers the book
+  with no code change.
+- **The agent binds them** into the categorical call (segment → health → play →
+  feature) and a `reason`, via a tool-use loop that ends by calling
+  `submit_decision`.
+- **Guardrails stay deterministic and wrap the agent** — the £ figures are always
+  computed by [ev.py](retention_agent/ev.py) (the agent picks the play, the code
+  sizes it, so the queue stays comparable); a **key account** (≥10% of book GMV) is
+  forced out of any automated play; and the **holdout** control group is enforced
+  by hash. The agent decides *around* these, never through them.
+
+It's the default when a key is present and degrades safely: no key, an API error, a
+refusal, or an unparseable result all fall back to the deterministic engine
+(`plays.decide`) — the exact logic that shipped before, still covered by the
+original tests. Every row records `decided_by` (`agent` | `deterministic`) so you
+can see, and measure, how often the agent departs from the baseline. `--no-agent`
+(CLI) forces the deterministic path.
 
 ### Reading behaviour, not labels
 
@@ -373,6 +423,16 @@ Being honest about where this is thin matters more than a confident headline:
 - **Some cleaning is defensive.** The duplicate-ID, negative-value, and
   gmv-total-mismatch guards don't fire on *this* (clean-ish) book; they're there
   for messier exports and are proven by fixture tests, not by the real file.
+- **The agent decision layer trades determinism for judgment.** An LLM deciding
+  each account is, unlike the old code, non-deterministic — the same changed
+  account *can* re-decide differently (idempotency still holds for *unchanged*
+  accounts via the fingerprint diff, so re-running the same file is still a no-op).
+  It also costs an LLM round-trip per new/changed account, so the 30k-account/2.6s
+  claim is the *deterministic* path; at that scale you'd keep `--no-agent` for the
+  bulk and route the agent at a reviewed subset (or use the Batch API). The `£`
+  maths, holdout, and key-account guard stay deterministic to bound what the
+  non-determinism can affect. And the live tool-loop needs a key to exercise — the
+  offline fallback and the guardrail assembly are what the tests cover.
 
 ## How I used AI
 
@@ -386,9 +446,13 @@ segmentation thresholds, the play precedence (`reengage > migrate > grow`), the
 risk-adjusted EV ranking (so exposure isn't ranked as at-risk GMV), the
 data-grounded feature tree, and the cadence gate for dormancy once the first cut
 flagged lumpy buyers as churn. I also ran the finished tool past an adversarial
-scorer and fixed what it found. The tool itself uses Claude the same way — to
-write drafts — behind a fingerprint cache and a heuristic fallback, so it never
-depends on the model being up. Full commit history shows the build order.
+scorer and fixed what it found. The tool itself now uses Claude two ways: an
+**account-analyst agent** makes the per-account decision by reasoning over
+deterministic tools and the written strategy, and Claude optionally writes the
+drafts. Both degrade to the tested heuristics with no key, so the tool never
+depends on the model being up — the judgment I encoded as thresholds became the
+guidelines the agent reasons with (and its fallback). Full commit history shows the
+build order.
 
 ## Data
 
