@@ -68,6 +68,7 @@
   <h1>Fleek Retention Agent</h1>
   <span class="wb" id="wb"></span>
   <span class="sp"></span>
+  <span id="llmstatus" class="wb"></span>
   <label class="tog"><input type="checkbox" id="llm"> use LLM drafts</label>
   <button onclick="run('Accounts')">Run · Accounts</button>
   <button onclick="run('new_accounts')">Run · new_accounts</button>
@@ -106,6 +107,9 @@ const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.class
 async function load(){
   STATE=await (await fetch('/api/state')).json();
   document.getElementById('wb').textContent=STATE.workbook?('data/raw/'+STATE.workbook):'no workbook in data/raw';
+  const ls=document.getElementById('llmstatus'), tog=document.getElementById('llm');
+  if(STATE.llm_available){ls.textContent='● LLM: ready';ls.style.color='#4ade80';tog.disabled=false;}
+  else{ls.textContent='○ LLM: no key (templated drafts)';ls.style.color='#c98a3a';tog.checked=false;tog.disabled=true;}
   renderBanners(); renderChips(); renderPlayFilter(); render();
 }
 function renderBanners(){

@@ -19,6 +19,7 @@ from fastapi import Body, FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from retention_agent import config
+from retention_agent.llm import LLM
 from retention_agent.orchestrator import run as run_loop
 from retention_agent.report import action_queue_csv
 from retention_agent.store import Store
@@ -48,6 +49,7 @@ def state():
     try:
         return {
             "workbook": Path(_workbook()).name if _workbook() else None,
+            "llm_available": LLM().enabled,   # is a usable ANTHROPIC_API_KEY loaded?
             "counts": s.counts(),
             "concentration": s.gmv_concentration(),
             "key_accounts": s.key_accounts(),
